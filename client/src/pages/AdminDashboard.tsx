@@ -8,10 +8,11 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Shield, LogOut, Check, X, ExternalLink, RefreshCw, Users, Trophy } from "lucide-react";
+import { Shield, LogOut, Check, X, ExternalLink, RefreshCw, Users, Trophy, Download, BarChart3, CheckCircle2, Clock, XCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { type Registration } from "@shared/schema";
+import { type Registration, TOURNAMENT_CONFIG } from "@shared/schema";
+import * as XLSX from "xlsx";
 
 export default function AdminDashboard() {
   const [, setLocation] = useLocation();
@@ -22,7 +23,7 @@ export default function AdminDashboard() {
   const { toast } = useToast();
 
   // Check authentication
-  const { data: authStatus, isLoading: authLoading } = useQuery({
+  const { data: authStatus, isLoading: authLoading } = useQuery<{ authenticated: boolean }>({
     queryKey: ["/api/admin/check"],
     retry: false,
   });
@@ -70,10 +71,8 @@ export default function AdminDashboard() {
   // Update registration status mutation
   const updateStatusMutation = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: string }) => {
-      return await apiRequest(`/api/registrations/${id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ status }),
-      });
+      const res = await apiRequest("PATCH", `/api/registrations/${id}`, { status });
+      return await res.json();
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["/api/registrations"] });
@@ -96,10 +95,11 @@ export default function AdminDashboard() {
   // Reset tournament mutation
   const resetTournamentMutation = useMutation({
     mutationFn: async () => {
-      return await apiRequest("/api/tournaments/reset", {
-        method: "POST",
-        body: JSON.stringify({ gameType: selectedGame, tournamentType: activeMode }),
+      const res = await apiRequest("POST", "/api/tournaments/reset", {
+        gameType: selectedGame,
+        tournamentType: activeMode,
       });
+      return await res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/tournaments"] });
@@ -121,9 +121,8 @@ export default function AdminDashboard() {
   // Logout mutation
   const logoutMutation = useMutation({
     mutationFn: async () => {
-      return await apiRequest("/api/admin/logout", {
-        method: "POST",
-      });
+      const res = await apiRequest("POST", "/api/admin/logout");
+      return await res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/check"] });
@@ -160,6 +159,62 @@ export default function AdminDashboard() {
       case "rejected":
         return <Badge variant="destructive">Rejected</Badge>;
     }
+  };
+
+  // Export to Excel function
+  const handleExportToExcel = () => {
+    if (!allRegistrations || allRegistrations.length === 0) {
+      toast({
+        title: "No Data",
+        description: "No registrations to export.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Prepare data for Excel
+    const exportData = filteredRegistrations.map((reg) => ({
+      "Registration ID": reg.id,
+      "Game": selectedGame.toUpperCase(),
+      "Mode": activeMode.charAt(0).toUpperCase() + activeMode.slice(1),
+      "Team Name": reg.teamName || "N/A",
+      "Player 1 Name": reg.playerName,
+      "Player 1 Game ID": reg.gameId,
+      "WhatsApp": reg.whatsapp,
+      "Player 2 Name": reg.player2Name || "N/A",
+      "Player 2 Game ID": reg.player2GameId || "N/A",
+      "Player 3 Name": reg.player3Name || "N/A",
+      "Player 3 Game ID": reg.player3GameId || "N/A",
+      "Player 4 Name": reg.player4Name || "N/A",
+      "Player 4 Game ID": reg.player4GameId || "N/A",
+      "Transaction ID": reg.transactionId,
+      "Status": reg.status.charAt(0).toUpperCase() + reg.status.slice(1),
+      "Submitted At": new Date(reg.submittedAt).toLocaleString(),
+    }));
+
+    // Create worksheet and workbook
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Registrations");
+
+    // Generate filename
+    const filename = `${selectedGame}_${activeMode}_registrations_${new Date().toISOString().split('T')[0]}.xlsx`;
+    
+    // Save file
+    XLSX.writeFile(workbook, filename);
+
+    toast({
+      title: "Export Successful",
+      description: `Downloaded ${filteredRegistrations.length} registrations`,
+    });
+  };
+
+  // Calculate statistics
+  const stats = {
+    total: filteredRegistrations.length,
+    pending: filteredRegistrations.filter((r) => r.status === "pending").length,
+    approved: filteredRegistrations.filter((r) => r.status === "approved").length,
+    rejected: filteredRegistrations.filter((r) => r.status === "rejected").length,
   };
 
   // Show loading while fetching data
@@ -228,6 +283,57 @@ export default function AdminDashboard() {
           </Card>
         </div>
 
+        {/* Statistics Cards */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground mb-1">Total</p>
+                  <p className="text-3xl font-bold">{stats.total}</p>
+                </div>
+                <BarChart3 className="w-8 h-8 text-primary" />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground mb-1">Pending</p>
+                  <p className="text-3xl font-bold text-warning">{stats.pending}</p>
+                </div>
+                <Clock className="w-8 h-8 text-warning" />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground mb-1">Approved</p>
+                  <p className="text-3xl font-bold text-success">{stats.approved}</p>
+                </div>
+                <CheckCircle2 className="w-8 h-8 text-success" />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground mb-1">Rejected</p>
+                  <p className="text-3xl font-bold text-destructive">{stats.rejected}</p>
+                </div>
+                <XCircle className="w-8 h-8 text-destructive" />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
         {/* Tournament Modes */}
         <Tabs value={activeMode} onValueChange={(value) => setActiveMode(value as "solo" | "duo" | "squad")} className="space-y-6">
           <div className="flex items-center justify-between">
@@ -249,6 +355,11 @@ export default function AdminDashboard() {
                   <SelectItem value="rejected">Rejected</SelectItem>
                 </SelectContent>
               </Select>
+
+              <Button variant="outline" className="gap-2" onClick={handleExportToExcel} data-testid="button-export-excel">
+                <Download className="w-4 h-4" />
+                Export Excel
+              </Button>
 
               <Button variant="outline" className="gap-2" onClick={handleReset} data-testid="button-reset-tournament">
                 <RefreshCw className="w-4 h-4" />
