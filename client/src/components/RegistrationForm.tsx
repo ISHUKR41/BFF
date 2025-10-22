@@ -1,8 +1,10 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { PatternFormat } from "react-number-format";
+import { useDropzone } from "react-dropzone";
+import { motion, AnimatePresence } from "framer-motion";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,7 +25,7 @@ interface RegistrationFormProps {
   isSubmitting: boolean;
 }
 
-const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB in bytes
+const MAX_FILE_SIZE = 5 * 1024 * 1024;
 
 export function RegistrationForm({ gameType, tournamentType, qrCodeUrl, onSubmit, isSubmitting }: RegistrationFormProps) {
   const [currentStep, setCurrentStep] = useState(1);
@@ -34,6 +36,12 @@ export function RegistrationForm({ gameType, tournamentType, qrCodeUrl, onSubmit
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const config = TOURNAMENT_CONFIG[gameType][tournamentType];
   const formKey = `registration-form-${gameType}-${tournamentType}`;
+
+  const gameColor = gameType === "bgmi" ? "text-bgmi" : "text-freefire";
+  const gameBg = gameType === "bgmi" ? "bg-bgmi" : "bg-freefire";
+  const gameBgLight = gameType === "bgmi" ? "bg-bgmi/10" : "bg-freefire/10";
+  const gameBorder = gameType === "bgmi" ? "border-bgmi" : "border-freefire";
+  const gameBorderLight = gameType === "bgmi" ? "border-bgmi/30" : "border-freefire/30";
 
   const formSchema = z.object({
     teamName: tournamentType !== "solo" ? z.string().min(1, "Team name is required") : z.string().optional(),
@@ -71,7 +79,6 @@ export function RegistrationForm({ gameType, tournamentType, qrCodeUrl, onSubmit
     },
   });
 
-  // Load form data from localStorage on mount
   useEffect(() => {
     const savedData = localStorage.getItem(formKey);
     if (savedData) {
@@ -95,7 +102,6 @@ export function RegistrationForm({ gameType, tournamentType, qrCodeUrl, onSubmit
     }
   }, [formKey, form]);
 
-  // Auto-save form data to localStorage
   useEffect(() => {
     const subscription = form.watch((value) => {
       const dataToSave = {
@@ -109,7 +115,6 @@ export function RegistrationForm({ gameType, tournamentType, qrCodeUrl, onSubmit
     return () => subscription.unsubscribe();
   }, [form, formKey, fileName, fileSize]);
 
-  // Warn before leaving with unsaved changes
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       if (hasUnsavedChanges && !isSubmitting) {
@@ -132,7 +137,6 @@ export function RegistrationForm({ gameType, tournamentType, qrCodeUrl, onSubmit
           let width = img.width;
           let height = img.height;
 
-          // Calculate new dimensions while maintaining aspect ratio
           const maxDimension = 1200;
           if (width > height && width > maxDimension) {
             height = (height * maxDimension) / width;
@@ -149,7 +153,6 @@ export function RegistrationForm({ gameType, tournamentType, qrCodeUrl, onSubmit
           if (ctx) {
             ctx.drawImage(img, 0, 0, width, height);
             
-            // Compress with quality based on file size
             let quality = 0.7;
             if (file.size > 2 * 1024 * 1024) quality = 0.5;
             if (file.size > 4 * 1024 * 1024) quality = 0.3;
@@ -168,40 +171,50 @@ export function RegistrationForm({ gameType, tournamentType, qrCodeUrl, onSubmit
     });
   };
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setFileError("");
-      
-      // Validate file size
-      if (file.size > MAX_FILE_SIZE) {
-        setFileError(`File size exceeds 5MB. Please upload a smaller image.`);
-        setFileName("");
-        setFileSize(0);
-        setScreenshotPreview("");
-        form.setValue("paymentScreenshot", "");
-        return;
-      }
+  const processFile = async (file: File) => {
+    setFileError("");
+    
+    if (file.size > MAX_FILE_SIZE) {
+      setFileError(`File size exceeds 5MB. Please upload a smaller image.`);
+      setFileName("");
+      setFileSize(0);
+      setScreenshotPreview("");
+      form.setValue("paymentScreenshot", "");
+      return;
+    }
 
-      setFileName(file.name);
-      setFileSize(file.size);
+    setFileName(file.name);
+    setFileSize(file.size);
 
-      try {
-        // Compress image if it's large
-        const base64 = file.size > 1024 * 1024 ? await compressImage(file) : await new Promise<string>((resolve) => {
-          const reader = new FileReader();
-          reader.onloadend = () => resolve(reader.result as string);
-          reader.readAsDataURL(file);
-        });
+    try {
+      const base64 = file.size > 1024 * 1024 ? await compressImage(file) : await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.readAsDataURL(file);
+      });
 
-        setScreenshotPreview(base64);
-        form.setValue("paymentScreenshot", base64);
-      } catch (error) {
-        setFileError("Failed to process image. Please try another file.");
-        console.error("Error processing image:", error);
-      }
+      setScreenshotPreview(base64);
+      form.setValue("paymentScreenshot", base64);
+    } catch (error) {
+      setFileError("Failed to process image. Please try another file.");
+      console.error("Error processing image:", error);
     }
   };
+
+  const onDrop = useCallback(async (acceptedFiles: File[]) => {
+    if (acceptedFiles.length > 0) {
+      await processFile(acceptedFiles[0]);
+    }
+  }, []);
+
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDrop,
+    accept: {
+      'image/*': ['.png', '.jpg', '.jpeg', '.gif', '.webp']
+    },
+    maxFiles: 1,
+    multiple: false,
+  });
 
   const removeFile = () => {
     setScreenshotPreview("");
@@ -238,35 +251,28 @@ export function RegistrationForm({ gameType, tournamentType, qrCodeUrl, onSubmit
   };
 
   const canProceedToStep2 = (): boolean => {
-    // Check all required fields for step 1
     const requiredFields: (keyof FormData)[] = ["playerName", "gameId", "whatsapp"];
     
-    // Add team name for duo/squad
     if (tournamentType !== "solo") {
       requiredFields.push("teamName");
     }
     
-    // Add player 2 for duo/squad
     if (config.maxPlayers >= 2) {
       requiredFields.push("player2Name", "player2GameId");
     }
     
-    // Add player 3 for squad
     if (config.maxPlayers >= 3) {
       requiredFields.push("player3Name", "player3GameId");
     }
     
-    // Add player 4 for squad
     if (config.maxPlayers >= 4) {
       requiredFields.push("player4Name", "player4GameId");
     }
     
-    // Check if all required fields are valid
     return requiredFields.every(fieldName => isFieldValid(fieldName));
   };
 
   const canProceedToStep3 = (): boolean => {
-    // Transaction ID is required for step 2
     return isFieldValid("transactionId");
   };
 
@@ -278,476 +284,728 @@ export function RegistrationForm({ gameType, tournamentType, qrCodeUrl, onSubmit
 
   const progressPercentage = ((currentStep - 1) / (steps.length - 1)) * 100;
 
+  const fieldVariants = {
+    hidden: { opacity: 0, y: 20 },
+    visible: (i: number) => ({
+      opacity: 1,
+      y: 0,
+      transition: {
+        delay: i * 0.1,
+        duration: 0.4,
+        ease: "easeOut"
+      }
+    })
+  };
+
+  const checkmarkVariants = {
+    hidden: { scale: 0, rotate: -180 },
+    visible: { 
+      scale: 1, 
+      rotate: 0,
+      transition: {
+        type: "spring",
+        stiffness: 260,
+        damping: 20
+      }
+    }
+  };
+
   return (
-    <Card>
+    <Card className={`${gameBorder} border-t-4`}>
       <CardHeader>
-        <CardTitle>Registration Form</CardTitle>
-        <CardDescription>Fill in all details carefully to complete your registration</CardDescription>
+        <CardTitle className="text-2xl">Registration Form</CardTitle>
+        <CardDescription className="text-base">Fill in all details carefully to complete your registration</CardDescription>
         
-        {/* Multi-step Progress Indicator */}
-        <div className="mt-6 space-y-4" data-testid="progress-indicator">
+        <div className="mt-6 space-y-5" data-testid="progress-indicator">
           <div className="flex items-center justify-between">
             {steps.map((step, index) => (
               <div key={step.number} className="flex items-center flex-1">
                 <div className="flex flex-col items-center flex-1">
-                  <div
-                    className={`w-10 h-10 rounded-full flex items-center justify-center border-2 transition-colors ${
+                  <motion.div
+                    className={`w-12 h-12 rounded-full flex items-center justify-center border-2 transition-all ${
                       currentStep >= step.number
-                        ? "bg-primary border-primary text-primary-foreground"
+                        ? `${gameBg} ${gameBorder} text-white`
                         : "bg-background border-border text-muted-foreground"
-                    } ${step.completed ? "bg-green-500 border-green-500" : ""}`}
+                    } ${step.completed ? `${gameBg} ${gameBorder}` : ""}`}
                     data-testid={`step-indicator-${step.number}`}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
                   >
-                    {step.completed ? (
-                      <Check className="w-5 h-5 text-white" />
-                    ) : (
-                      <span className="text-sm font-semibold">{step.number}</span>
-                    )}
-                  </div>
-                  <span className={`text-xs mt-2 text-center ${currentStep >= step.number ? "text-foreground font-medium" : "text-muted-foreground"}`}>
+                    <AnimatePresence mode="wait">
+                      {step.completed ? (
+                        <motion.div
+                          key="check"
+                          variants={checkmarkVariants}
+                          initial="hidden"
+                          animate="visible"
+                          exit="hidden"
+                        >
+                          <Check className="w-6 h-6 text-white" />
+                        </motion.div>
+                      ) : (
+                        <motion.span
+                          key="number"
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          exit={{ opacity: 0 }}
+                          className="text-base font-bold"
+                        >
+                          {step.number}
+                        </motion.span>
+                      )}
+                    </AnimatePresence>
+                  </motion.div>
+                  <span className={`text-xs mt-2 text-center font-medium ${currentStep >= step.number ? "text-foreground" : "text-muted-foreground"}`}>
                     {step.title}
                   </span>
                 </div>
                 {index < steps.length - 1 && (
-                  <div className="flex-1 h-0.5 mx-2 bg-border relative" style={{ top: "-20px" }}>
-                    <div
-                      className="h-full bg-primary transition-all duration-300"
-                      style={{ width: currentStep > step.number ? "100%" : "0%" }}
+                  <div className="flex-1 h-1 mx-3 bg-border rounded-full relative" style={{ top: "-20px" }}>
+                    <motion.div
+                      className={`h-full ${gameBg} rounded-full`}
+                      initial={{ width: "0%" }}
+                      animate={{ width: currentStep > step.number ? "100%" : "0%" }}
+                      transition={{ duration: 0.5, ease: "easeInOut" }}
                     />
                   </div>
                 )}
               </div>
             ))}
           </div>
-          <Progress value={progressPercentage} className="h-2" data-testid="progress-bar" />
+          <div className="relative">
+            <Progress value={progressPercentage} className="h-2" data-testid="progress-bar" />
+            <motion.div
+              className={`absolute top-0 left-0 h-full ${gameBg} rounded-full`}
+              initial={{ width: "0%" }}
+              animate={{ width: `${progressPercentage}%` }}
+              transition={{ duration: 0.5, ease: "easeInOut" }}
+              style={{ zIndex: 10 }}
+            />
+          </div>
         </div>
       </CardHeader>
       <CardContent>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
-            {/* Step 1: Team/Player Details */}
-            {currentStep === 1 && (
-              <div className="space-y-6" data-testid="step-team-player-details">
-                {/* Team Name (Duo/Squad only) */}
-                {tournamentType !== "solo" && (
-                  <FormField
-                    control={form.control}
-                    name="teamName"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="flex items-center gap-2">
-                          Team Name
-                          <span className="text-destructive">*</span>
-                          {isFieldValid("teamName") && <Check className="w-4 h-4 text-green-500" data-testid="check-team-name" />}
-                        </FormLabel>
-                        <FormControl>
-                          <Input {...field} placeholder="Enter your team name" data-testid="input-team-name" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                )}
+          <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-8">
+            <AnimatePresence mode="wait">
+              {currentStep === 1 && (
+                <motion.div
+                  key="step1"
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -20 }}
+                  transition={{ duration: 0.3 }}
+                  className="space-y-6"
+                  data-testid="step-team-player-details"
+                >
+                  {tournamentType !== "solo" && (
+                    <motion.div custom={0} variants={fieldVariants} initial="hidden" animate="visible">
+                      <FormField
+                        control={form.control}
+                        name="teamName"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="flex items-center gap-2 text-base">
+                              Team Name
+                              <span className="text-destructive">*</span>
+                              <AnimatePresence>
+                                {isFieldValid("teamName") && (
+                                  <motion.div
+                                    variants={checkmarkVariants}
+                                    initial="hidden"
+                                    animate="visible"
+                                    exit="hidden"
+                                  >
+                                    <Check className={`w-4 h-4 ${gameColor}`} data-testid="check-team-name" />
+                                  </motion.div>
+                                )}
+                              </AnimatePresence>
+                            </FormLabel>
+                            <FormControl>
+                              <Input {...field} placeholder="Enter your team name" className="h-11" data-testid="input-team-name" />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </motion.div>
+                  )}
 
-                {/* Player 1 (Team Leader / Solo Player) */}
-                <div className="space-y-4 p-4 rounded-lg bg-muted/50 border border-border">
-                  <div className="flex items-center gap-2">
-                    <Badge variant="secondary">Player 1 {tournamentType !== "solo" && "(Team Leader)"}</Badge>
-                  </div>
-                  <div className="grid md:grid-cols-2 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="playerName"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="flex items-center gap-2">
-                            Player Name
-                            <span className="text-destructive">*</span>
-                            {isFieldValid("playerName") && <Check className="w-4 h-4 text-green-500" data-testid="check-player-name" />}
-                          </FormLabel>
-                          <FormControl>
-                            <Input {...field} placeholder="Enter name" data-testid="input-player1-name" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="gameId"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="flex items-center gap-2">
-                            Game ID
-                            <span className="text-destructive">*</span>
-                            {isFieldValid("gameId") && <Check className="w-4 h-4 text-green-500" data-testid="check-game-id" />}
-                          </FormLabel>
-                          <FormControl>
-                            <Input {...field} placeholder="Enter game ID" data-testid="input-player1-gameid" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                  <FormField
-                    control={form.control}
-                    name="whatsapp"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="flex items-center gap-2">
-                          WhatsApp Number
-                          <span className="text-destructive">*</span>
-                          {isFieldValid("whatsapp") && <Check className="w-4 h-4 text-green-500" data-testid="check-whatsapp" />}
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Info className="w-4 h-4 text-muted-foreground cursor-help" data-testid="info-whatsapp" />
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p>We'll send match details and updates here</p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </FormLabel>
-                        <FormControl>
+                  <motion.div 
+                    custom={tournamentType !== "solo" ? 1 : 0} 
+                    variants={fieldVariants} 
+                    initial="hidden" 
+                    animate="visible"
+                    className={`space-y-5 p-6 rounded-lg ${gameBgLight} border-2 ${gameBorderLight}`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <Badge className={`${gameBg} text-white`}>
+                        Player 1 {tournamentType !== "solo" && "(Team Leader)"}
+                      </Badge>
+                    </div>
+                    <div className="grid md:grid-cols-2 gap-5">
+                      <FormField
+                        control={form.control}
+                        name="playerName"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="flex items-center gap-2 text-base">
+                              Player Name
+                              <span className="text-destructive">*</span>
+                              <AnimatePresence>
+                                {isFieldValid("playerName") && (
+                                  <motion.div variants={checkmarkVariants} initial="hidden" animate="visible" exit="hidden">
+                                    <Check className={`w-4 h-4 ${gameColor}`} data-testid="check-player-name" />
+                                  </motion.div>
+                                )}
+                              </AnimatePresence>
+                            </FormLabel>
+                            <FormControl>
+                              <Input {...field} placeholder="Enter name" className="h-11" data-testid="input-player1-name" />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="gameId"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="flex items-center gap-2 text-base">
+                              Game ID
+                              <span className="text-destructive">*</span>
+                              <AnimatePresence>
+                                {isFieldValid("gameId") && (
+                                  <motion.div variants={checkmarkVariants} initial="hidden" animate="visible" exit="hidden">
+                                    <Check className={`w-4 h-4 ${gameColor}`} data-testid="check-game-id" />
+                                  </motion.div>
+                                )}
+                              </AnimatePresence>
+                            </FormLabel>
+                            <FormControl>
+                              <Input {...field} placeholder="Enter game ID" className="h-11" data-testid="input-player1-gameid" />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                    <FormItem>
+                      <FormLabel className="flex items-center gap-2 text-base">
+                        WhatsApp Number
+                        <span className="text-destructive">*</span>
+                        <AnimatePresence>
+                          {isFieldValid("whatsapp") && (
+                            <motion.div variants={checkmarkVariants} initial="hidden" animate="visible" exit="hidden">
+                              <Check className={`w-4 h-4 ${gameColor}`} data-testid="check-whatsapp" />
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Info className="w-4 h-4 text-muted-foreground cursor-help" data-testid="info-whatsapp" />
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>We'll send match details and updates here</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </FormLabel>
+                      <Controller
+                        control={form.control}
+                        name="whatsapp"
+                        render={({ field }) => (
                           <PatternFormat
-                            {...field}
+                            value={field.value}
                             format="+91 ##### #####"
                             mask="_"
                             placeholder="+91 XXXXX XXXXX"
                             customInput={Input}
+                            className="h-11"
                             data-testid="input-whatsapp"
                             onValueChange={(values) => {
                               field.onChange(values.value);
                             }}
                           />
-                        </FormControl>
-                        <FormDescription>We'll send match details here</FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-
-                {/* Player 2 (Duo/Squad) */}
-                {config.maxPlayers >= 2 && (
-                  <div className="space-y-4 p-4 rounded-lg bg-muted/50 border border-border">
-                    <Badge variant="secondary">Player 2</Badge>
-                    <div className="grid md:grid-cols-2 gap-4">
-                      <FormField
-                        control={form.control}
-                        name="player2Name"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel className="flex items-center gap-2">
-                              Player Name
-                              <span className="text-destructive">*</span>
-                              {isFieldValid("player2Name") && <Check className="w-4 h-4 text-green-500" data-testid="check-player2-name" />}
-                            </FormLabel>
-                            <FormControl>
-                              <Input {...field} placeholder="Enter name" data-testid="input-player2-name" />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
                         )}
                       />
-                      <FormField
-                        control={form.control}
-                        name="player2GameId"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel className="flex items-center gap-2">
-                              Game ID
-                              <span className="text-destructive">*</span>
-                              {isFieldValid("player2GameId") && <Check className="w-4 h-4 text-green-500" data-testid="check-player2-gameid" />}
-                            </FormLabel>
-                            <FormControl>
-                              <Input {...field} placeholder="Enter game ID" data-testid="input-player2-gameid" />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-                  </div>
-                )}
+                      <FormDescription>We'll send match details here</FormDescription>
+                      {form.formState.errors.whatsapp && (
+                        <p className="text-sm font-medium text-destructive">{form.formState.errors.whatsapp.message}</p>
+                      )}
+                    </FormItem>
+                  </motion.div>
 
-                {/* Player 3 (Squad) */}
-                {config.maxPlayers >= 3 && (
-                  <div className="space-y-4 p-4 rounded-lg bg-muted/50 border border-border">
-                    <Badge variant="secondary">Player 3</Badge>
-                    <div className="grid md:grid-cols-2 gap-4">
-                      <FormField
-                        control={form.control}
-                        name="player3Name"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel className="flex items-center gap-2">
-                              Player Name
-                              <span className="text-destructive">*</span>
-                              {isFieldValid("player3Name") && <Check className="w-4 h-4 text-green-500" data-testid="check-player3-name" />}
-                            </FormLabel>
-                            <FormControl>
-                              <Input {...field} placeholder="Enter name" data-testid="input-player3-name" />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name="player3GameId"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel className="flex items-center gap-2">
-                              Game ID
-                              <span className="text-destructive">*</span>
-                              {isFieldValid("player3GameId") && <Check className="w-4 h-4 text-green-500" data-testid="check-player3-gameid" />}
-                            </FormLabel>
-                            <FormControl>
-                              <Input {...field} placeholder="Enter game ID" data-testid="input-player3-gameid" />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {/* Player 4 (Squad) */}
-                {config.maxPlayers >= 4 && (
-                  <div className="space-y-4 p-4 rounded-lg bg-muted/50 border border-border">
-                    <Badge variant="secondary">Player 4</Badge>
-                    <div className="grid md:grid-cols-2 gap-4">
-                      <FormField
-                        control={form.control}
-                        name="player4Name"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel className="flex items-center gap-2">
-                              Player Name
-                              <span className="text-destructive">*</span>
-                              {isFieldValid("player4Name") && <Check className="w-4 h-4 text-green-500" data-testid="check-player4-name" />}
-                            </FormLabel>
-                            <FormControl>
-                              <Input {...field} placeholder="Enter name" data-testid="input-player4-name" />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name="player4GameId"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel className="flex items-center gap-2">
-                              Game ID
-                              <span className="text-destructive">*</span>
-                              {isFieldValid("player4GameId") && <Check className="w-4 h-4 text-green-500" data-testid="check-player4-gameid" />}
-                            </FormLabel>
-                            <FormControl>
-                              <Input {...field} placeholder="Enter game ID" data-testid="input-player4-gameid" />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-                  </div>
-                )}
-
-                <Button
-                  type="button"
-                  className="w-full"
-                  size="lg"
-                  onClick={() => setCurrentStep(2)}
-                  disabled={!canProceedToStep2()}
-                  data-testid="button-next-step"
-                >
-                  Continue to Payment
-                </Button>
-                {!canProceedToStep2() && (
-                  <p className="text-sm text-muted-foreground text-center">
-                    Please fill in all required fields to continue
-                  </p>
-                )}
-              </div>
-            )}
-
-            {/* Step 2: Payment Details */}
-            {currentStep === 2 && (
-              <div className="space-y-6" data-testid="step-payment-details">
-                <div className="space-y-4 p-6 rounded-lg bg-primary/5 border-2 border-primary/20">
-                  <h3 className="text-lg font-semibold">Payment Details</h3>
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between p-4 rounded-md bg-background border border-border" data-testid="text-entry-fee-display">
-                      <span className="text-sm font-medium">Entry Fee</span>
-                      <span className="text-xl font-bold text-primary">₹{config.entryFee}</span>
-                    </div>
-
-                    {qrCodeUrl && (
-                      <div className="text-center space-y-2">
-                        <Label>Scan QR Code to Pay</Label>
-                        <div className="inline-block p-4 rounded-lg bg-white">
-                          <img src={qrCodeUrl} alt="Payment QR Code" className="w-48 h-48 mx-auto" data-testid="img-payment-qr" />
-                        </div>
+                  {config.maxPlayers >= 2 && (
+                    <motion.div 
+                      custom={tournamentType !== "solo" ? 2 : 1} 
+                      variants={fieldVariants} 
+                      initial="hidden" 
+                      animate="visible"
+                      className={`space-y-5 p-6 rounded-lg ${gameBgLight} border-2 ${gameBorderLight}`}
+                    >
+                      <Badge className={`${gameBg} text-white`}>Player 2</Badge>
+                      <div className="grid md:grid-cols-2 gap-5">
+                        <FormField
+                          control={form.control}
+                          name="player2Name"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="flex items-center gap-2 text-base">
+                                Player Name
+                                <span className="text-destructive">*</span>
+                                <AnimatePresence>
+                                  {isFieldValid("player2Name") && (
+                                    <motion.div variants={checkmarkVariants} initial="hidden" animate="visible" exit="hidden">
+                                      <Check className={`w-4 h-4 ${gameColor}`} data-testid="check-player2-name" />
+                                    </motion.div>
+                                  )}
+                                </AnimatePresence>
+                              </FormLabel>
+                              <FormControl>
+                                <Input {...field} placeholder="Enter name" className="h-11" data-testid="input-player2-name" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="player2GameId"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="flex items-center gap-2 text-base">
+                                Game ID
+                                <span className="text-destructive">*</span>
+                                <AnimatePresence>
+                                  {isFieldValid("player2GameId") && (
+                                    <motion.div variants={checkmarkVariants} initial="hidden" animate="visible" exit="hidden">
+                                      <Check className={`w-4 h-4 ${gameColor}`} data-testid="check-player2-gameid" />
+                                    </motion.div>
+                                  )}
+                                </AnimatePresence>
+                              </FormLabel>
+                              <FormControl>
+                                <Input {...field} placeholder="Enter game ID" className="h-11" data-testid="input-player2-gameid" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
                       </div>
-                    )}
+                    </motion.div>
+                  )}
 
-                    <FormField
-                      control={form.control}
-                      name="paymentScreenshot"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="flex items-center gap-2">
-                            Payment Screenshot
-                            <span className="text-muted-foreground text-xs">(Optional)</span>
-                            {screenshotPreview && <Check className="w-4 h-4 text-green-500" data-testid="check-screenshot" />}
-                          </FormLabel>
-                          <FormControl>
-                            <div className="space-y-2">
-                              {fileError && (
-                                <Alert variant="destructive" data-testid="alert-file-error">
-                                  <AlertCircle className="h-4 w-4" />
-                                  <AlertDescription>{fileError}</AlertDescription>
-                                </Alert>
-                              )}
-                              
-                              {!screenshotPreview ? (
-                                <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-border rounded-lg cursor-pointer hover-elevate active-elevate-2 bg-muted/30">
-                                  <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                                    <Upload className="w-8 h-8 mb-2 text-muted-foreground" />
-                                    <p className="text-xs text-muted-foreground">Click to upload screenshot</p>
-                                    <p className="text-xs text-muted-foreground mt-1">Max size: 5MB</p>
-                                  </div>
-                                  <input
-                                    type="file"
-                                    accept="image/*"
-                                    className="hidden"
-                                    onChange={handleFileChange}
-                                    data-testid="input-payment-screenshot"
-                                  />
-                                </label>
-                              ) : (
-                                <div className="space-y-3">
-                                  <div className="relative rounded-lg border border-border p-4 bg-muted/30">
-                                    <img src={screenshotPreview} alt="Preview" className="w-full h-40 object-contain rounded" />
-                                  </div>
-                                  <div className="flex items-center justify-between p-3 rounded-md bg-background border border-border">
-                                    <div className="flex items-center gap-2 flex-1 min-w-0">
-                                      <ImagePlus className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-                                      <div className="flex-1 min-w-0">
-                                        <p className="text-sm font-medium truncate" data-testid="text-file-name">{fileName}</p>
-                                        <p className="text-xs text-muted-foreground" data-testid="text-file-size">{formatFileSize(fileSize)}</p>
-                                      </div>
+                  {config.maxPlayers >= 3 && (
+                    <motion.div 
+                      custom={tournamentType !== "solo" ? 3 : 2} 
+                      variants={fieldVariants} 
+                      initial="hidden" 
+                      animate="visible"
+                      className={`space-y-5 p-6 rounded-lg ${gameBgLight} border-2 ${gameBorderLight}`}
+                    >
+                      <Badge className={`${gameBg} text-white`}>Player 3</Badge>
+                      <div className="grid md:grid-cols-2 gap-5">
+                        <FormField
+                          control={form.control}
+                          name="player3Name"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="flex items-center gap-2 text-base">
+                                Player Name
+                                <span className="text-destructive">*</span>
+                                <AnimatePresence>
+                                  {isFieldValid("player3Name") && (
+                                    <motion.div variants={checkmarkVariants} initial="hidden" animate="visible" exit="hidden">
+                                      <Check className={`w-4 h-4 ${gameColor}`} data-testid="check-player3-name" />
+                                    </motion.div>
+                                  )}
+                                </AnimatePresence>
+                              </FormLabel>
+                              <FormControl>
+                                <Input {...field} placeholder="Enter name" className="h-11" data-testid="input-player3-name" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="player3GameId"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="flex items-center gap-2 text-base">
+                                Game ID
+                                <span className="text-destructive">*</span>
+                                <AnimatePresence>
+                                  {isFieldValid("player3GameId") && (
+                                    <motion.div variants={checkmarkVariants} initial="hidden" animate="visible" exit="hidden">
+                                      <Check className={`w-4 h-4 ${gameColor}`} data-testid="check-player3-gameid" />
+                                    </motion.div>
+                                  )}
+                                </AnimatePresence>
+                              </FormLabel>
+                              <FormControl>
+                                <Input {...field} placeholder="Enter game ID" className="h-11" data-testid="input-player3-gameid" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                    </motion.div>
+                  )}
+
+                  {config.maxPlayers >= 4 && (
+                    <motion.div 
+                      custom={tournamentType !== "solo" ? 4 : 3} 
+                      variants={fieldVariants} 
+                      initial="hidden" 
+                      animate="visible"
+                      className={`space-y-5 p-6 rounded-lg ${gameBgLight} border-2 ${gameBorderLight}`}
+                    >
+                      <Badge className={`${gameBg} text-white`}>Player 4</Badge>
+                      <div className="grid md:grid-cols-2 gap-5">
+                        <FormField
+                          control={form.control}
+                          name="player4Name"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="flex items-center gap-2 text-base">
+                                Player Name
+                                <span className="text-destructive">*</span>
+                                <AnimatePresence>
+                                  {isFieldValid("player4Name") && (
+                                    <motion.div variants={checkmarkVariants} initial="hidden" animate="visible" exit="hidden">
+                                      <Check className={`w-4 h-4 ${gameColor}`} data-testid="check-player4-name" />
+                                    </motion.div>
+                                  )}
+                                </AnimatePresence>
+                              </FormLabel>
+                              <FormControl>
+                                <Input {...field} placeholder="Enter name" className="h-11" data-testid="input-player4-name" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="player4GameId"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="flex items-center gap-2 text-base">
+                                Game ID
+                                <span className="text-destructive">*</span>
+                                <AnimatePresence>
+                                  {isFieldValid("player4GameId") && (
+                                    <motion.div variants={checkmarkVariants} initial="hidden" animate="visible" exit="hidden">
+                                      <Check className={`w-4 h-4 ${gameColor}`} data-testid="check-player4-gameid" />
+                                    </motion.div>
+                                  )}
+                                </AnimatePresence>
+                              </FormLabel>
+                              <FormControl>
+                                <Input {...field} placeholder="Enter game ID" className="h-11" data-testid="input-player4-gameid" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                    </motion.div>
+                  )}
+
+                  <div className="space-y-3">
+                    <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                      <Button
+                        type="button"
+                        className={`w-full h-12 text-base font-semibold ${gameBg} hover:opacity-90`}
+                        size="lg"
+                        onClick={() => setCurrentStep(2)}
+                        disabled={!canProceedToStep2()}
+                        data-testid="button-next-step"
+                      >
+                        Continue to Payment
+                      </Button>
+                    </motion.div>
+                    {!canProceedToStep2() && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className={`text-sm ${gameColor} text-center p-3 rounded-md ${gameBgLight} border ${gameBorderLight}`}
+                      >
+                        <AlertCircle className="w-4 h-4 inline mr-2" />
+                        Please fill in all required fields to continue
+                      </motion.div>
+                    )}
+                  </div>
+                </motion.div>
+              )}
+
+              {currentStep === 2 && (
+                <motion.div
+                  key="step2"
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -20 }}
+                  transition={{ duration: 0.3 }}
+                  className="space-y-6"
+                  data-testid="step-payment-details"
+                >
+                  <motion.div 
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.1 }}
+                    className={`space-y-5 p-6 rounded-lg ${gameBgLight} border-2 ${gameBorder}`}
+                  >
+                    <h3 className="text-xl font-bold flex items-center gap-2">
+                      <div className={`w-1 h-6 ${gameBg} rounded-full`} />
+                      Payment Details
+                    </h3>
+                    <div className="space-y-5">
+                      <div className={`flex items-center justify-between p-5 rounded-lg bg-background border-2 ${gameBorderLight}`} data-testid="text-entry-fee-display">
+                        <span className="text-base font-semibold">Entry Fee</span>
+                        <span className={`text-3xl font-bold ${gameColor}`}>₹{config.entryFee}</span>
+                      </div>
+
+                      {qrCodeUrl && (
+                        <motion.div 
+                          initial={{ opacity: 0, scale: 0.9 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          transition={{ delay: 0.2 }}
+                          className="text-center space-y-3"
+                        >
+                          <Label className="text-base font-semibold">Scan QR Code to Pay</Label>
+                          <div className={`inline-block p-5 rounded-lg bg-white border-2 ${gameBorderLight}`}>
+                            <img src={qrCodeUrl} alt="Payment QR Code" className="w-52 h-52 mx-auto" data-testid="img-payment-qr" />
+                          </div>
+                        </motion.div>
+                      )}
+
+                      <FormField
+                        control={form.control}
+                        name="paymentScreenshot"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="flex items-center gap-2 text-base">
+                              Payment Screenshot
+                              <span className="text-muted-foreground text-sm">(Optional)</span>
+                              <AnimatePresence>
+                                {screenshotPreview && (
+                                  <motion.div variants={checkmarkVariants} initial="hidden" animate="visible" exit="hidden">
+                                    <Check className={`w-4 h-4 ${gameColor}`} data-testid="check-screenshot" />
+                                  </motion.div>
+                                )}
+                              </AnimatePresence>
+                            </FormLabel>
+                            <FormControl>
+                              <div className="space-y-3">
+                                {fileError && (
+                                  <motion.div
+                                    initial={{ opacity: 0, y: -10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                  >
+                                    <Alert variant="destructive" data-testid="alert-file-error">
+                                      <AlertCircle className="h-4 w-4" />
+                                      <AlertDescription>{fileError}</AlertDescription>
+                                    </Alert>
+                                  </motion.div>
+                                )}
+                                
+                                {!screenshotPreview ? (
+                                  <motion.div
+                                    {...getRootProps()}
+                                    className={`flex flex-col items-center justify-center w-full min-h-48 border-3 border-dashed rounded-lg cursor-pointer transition-all ${
+                                      isDragActive
+                                        ? `${gameBorder} ${gameBgLight} border-solid`
+                                        : `border-border hover-elevate active-elevate-2 bg-muted/20`
+                                    }`}
+                                    whileHover={{ scale: 1.01 }}
+                                    whileTap={{ scale: 0.99 }}
+                                  >
+                                    <input {...getInputProps()} data-testid="input-payment-screenshot" />
+                                    <div className="flex flex-col items-center justify-center p-8 text-center">
+                                      <motion.div
+                                        animate={isDragActive ? { scale: [1, 1.1, 1], rotate: [0, 5, -5, 0] } : {}}
+                                        transition={{ duration: 0.5, repeat: isDragActive ? Infinity : 0 }}
+                                      >
+                                        <Upload className={`w-12 h-12 mb-4 ${isDragActive ? gameColor : 'text-muted-foreground'}`} />
+                                      </motion.div>
+                                      <p className={`text-base font-semibold mb-2 ${isDragActive ? gameColor : 'text-foreground'}`}>
+                                        {isDragActive ? "Drop your screenshot here" : "Drag & drop your payment screenshot here"}
+                                      </p>
+                                      <p className="text-sm text-muted-foreground mb-1">or click to browse</p>
+                                      <p className="text-xs text-muted-foreground mt-2">Supported formats: PNG, JPG, JPEG, GIF, WEBP</p>
+                                      <p className="text-xs text-muted-foreground">Max size: 5MB</p>
                                     </div>
-                                    <div className="flex gap-2 ml-2">
-                                      <label>
+                                  </motion.div>
+                                ) : (
+                                  <motion.div
+                                    initial={{ opacity: 0, scale: 0.9 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    className="space-y-4"
+                                  >
+                                    <div className={`relative rounded-lg border-2 ${gameBorderLight} p-4 ${gameBgLight}`}>
+                                      <img src={screenshotPreview} alt="Preview" className="w-full h-48 object-contain rounded" />
+                                    </div>
+                                    <div className="flex items-center justify-between p-4 rounded-lg bg-background border border-border">
+                                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                                        <ImagePlus className={`w-5 h-5 ${gameColor} flex-shrink-0`} />
+                                        <div className="flex-1 min-w-0">
+                                          <p className="text-sm font-semibold truncate" data-testid="text-file-name">{fileName}</p>
+                                          <p className="text-xs text-muted-foreground" data-testid="text-file-size">{formatFileSize(fileSize)}</p>
+                                        </div>
+                                      </div>
+                                      <div className="flex gap-2 ml-3">
+                                        <div {...getRootProps()}>
+                                          <input {...getInputProps()} />
+                                          <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            className="h-9"
+                                            data-testid="button-change-image"
+                                          >
+                                            Change
+                                          </Button>
+                                        </div>
                                         <Button
                                           type="button"
                                           variant="outline"
                                           size="sm"
-                                          asChild
-                                          data-testid="button-change-image"
+                                          className="h-9"
+                                          onClick={removeFile}
+                                          data-testid="button-remove-image"
                                         >
-                                          <span className="cursor-pointer">Change</span>
+                                          <X className="w-4 h-4" />
                                         </Button>
-                                        <input
-                                          type="file"
-                                          accept="image/*"
-                                          className="hidden"
-                                          onChange={handleFileChange}
-                                        />
-                                      </label>
-                                      <Button
-                                        type="button"
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={removeFile}
-                                        data-testid="button-remove-image"
-                                      >
-                                        <X className="w-4 h-4" />
-                                      </Button>
+                                      </div>
                                     </div>
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                                  </motion.div>
+                                )}
+                              </div>
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
 
-                    <FormField
-                      control={form.control}
-                      name="transactionId"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="flex items-center gap-2">
-                            Transaction ID / UTR Number
-                            <span className="text-destructive">*</span>
-                            {isFieldValid("transactionId") && <Check className="w-4 h-4 text-green-500" data-testid="check-transaction-id" />}
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Info className="w-4 h-4 text-muted-foreground cursor-help" data-testid="info-transaction-id" />
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p>Found in your payment app after completing payment</p>
-                              </TooltipContent>
-                            </Tooltip>
-                          </FormLabel>
-                          <FormControl>
-                            <Input {...field} placeholder="Enter transaction ID" className="font-mono" data-testid="input-transaction-id" />
-                          </FormControl>
-                          <FormDescription>Found in your payment app after completing payment</FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                      <FormField
+                        control={form.control}
+                        name="transactionId"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="flex items-center gap-2 text-base">
+                              Transaction ID / UTR Number
+                              <span className="text-destructive">*</span>
+                              <AnimatePresence>
+                                {isFieldValid("transactionId") && (
+                                  <motion.div variants={checkmarkVariants} initial="hidden" animate="visible" exit="hidden">
+                                    <Check className={`w-4 h-4 ${gameColor}`} data-testid="check-transaction-id" />
+                                  </motion.div>
+                                )}
+                              </AnimatePresence>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Info className="w-4 h-4 text-muted-foreground cursor-help" data-testid="info-transaction-id" />
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>Found in your payment app after completing payment</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </FormLabel>
+                            <FormControl>
+                              <Input {...field} placeholder="Enter transaction ID" className="font-mono h-11" data-testid="input-transaction-id" />
+                            </FormControl>
+                            <FormDescription>Found in your payment app after completing payment</FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                  </motion.div>
+
+                  <div className="flex gap-4">
+                    <motion.div className="flex-1" whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="w-full h-12 text-base font-semibold"
+                        size="lg"
+                        onClick={() => setCurrentStep(1)}
+                        data-testid="button-back-step"
+                      >
+                        Back
+                      </Button>
+                    </motion.div>
+                    <motion.div className="flex-1" whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                      <Button
+                        type="submit"
+                        className={`w-full h-12 text-base font-semibold ${gameBg} hover:opacity-90`}
+                        size="lg"
+                        disabled={isSubmitting || !canProceedToStep3()}
+                        data-testid="button-submit-registration"
+                      >
+                        <AnimatePresence mode="wait">
+                          {isSubmitting ? (
+                            <motion.div
+                              key="loading"
+                              initial={{ opacity: 0 }}
+                              animate={{ opacity: 1 }}
+                              exit={{ opacity: 0 }}
+                              className="flex items-center"
+                            >
+                              <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                              Submitting...
+                            </motion.div>
+                          ) : (
+                            <motion.span
+                              key="submit"
+                              initial={{ opacity: 0 }}
+                              animate={{ opacity: 1 }}
+                              exit={{ opacity: 0 }}
+                            >
+                              Complete Registration
+                            </motion.span>
+                          )}
+                        </AnimatePresence>
+                      </Button>
+                    </motion.div>
                   </div>
-                </div>
+                  {!canProceedToStep3() && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className={`text-sm ${gameColor} text-center p-3 rounded-md ${gameBgLight} border ${gameBorderLight}`}
+                    >
+                      <AlertCircle className="w-4 h-4 inline mr-2" />
+                      Please enter your transaction ID to proceed
+                    </motion.div>
+                  )}
+                </motion.div>
+              )}
 
-                <div className="flex gap-4">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="flex-1"
-                    size="lg"
-                    onClick={() => setCurrentStep(1)}
-                    data-testid="button-back-step"
+              {currentStep === 3 && (
+                <motion.div
+                  key="step3"
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ duration: 0.3 }}
+                  className="text-center space-y-6 py-12"
+                  data-testid="step-review-submit"
+                >
+                  <motion.div
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
                   >
-                    Back
-                  </Button>
-                  <Button
-                    type="submit"
-                    className="flex-1"
-                    size="lg"
-                    disabled={isSubmitting || !canProceedToStep3()}
-                    data-testid="button-submit-registration"
-                  >
-                    {isSubmitting ? (
-                      <>
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        Submitting...
-                      </>
-                    ) : (
-                      "Complete Registration"
-                    )}
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            {/* Step 3: Review & Submit (shown during submission) */}
-            {currentStep === 3 && (
-              <div className="text-center space-y-4" data-testid="step-review-submit">
-                <Loader2 className="w-12 h-12 mx-auto animate-spin text-primary" />
-                <h3 className="text-lg font-semibold">Processing Your Registration...</h3>
-                <p className="text-muted-foreground">Please wait while we submit your registration</p>
-              </div>
-            )}
+                    <Loader2 className={`w-16 h-16 mx-auto ${gameColor}`} />
+                  </motion.div>
+                  <h3 className="text-2xl font-bold">Processing Your Registration...</h3>
+                  <p className="text-muted-foreground text-base">Please wait while we submit your registration</p>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </form>
         </Form>
       </CardContent>

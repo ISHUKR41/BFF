@@ -15,11 +15,14 @@ import { Shield, LogOut, Check, X, ExternalLink, RefreshCw, Users, Trophy, Downl
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { type Registration, type Tournament, TOURNAMENT_CONFIG } from "@shared/schema";
-import { formatDistanceToNow } from "date-fns";
+import { formatDistanceToNow, format, startOfDay } from "date-fns";
 import * as XLSX from "xlsx";
 import copy from "copy-to-clipboard";
 import Lightbox from "yet-another-react-lightbox";
 import "yet-another-react-lightbox/styles.css";
+import CountUp from "react-countup";
+import { motion } from "framer-motion";
+import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -495,6 +498,95 @@ export default function AdminDashboard() {
       : 0,
   };
 
+  // Chart data calculations
+  const gameTypeData = [
+    {
+      name: "BGMI",
+      registrations: allRegistrations?.filter(r => r.gameType === "bgmi").length || 0,
+      approved: allRegistrations?.filter(r => r.gameType === "bgmi" && r.status === "approved").length || 0,
+      pending: allRegistrations?.filter(r => r.gameType === "bgmi" && r.status === "pending").length || 0,
+      rejected: allRegistrations?.filter(r => r.gameType === "bgmi" && r.status === "rejected").length || 0,
+    },
+    {
+      name: "Free Fire",
+      registrations: allRegistrations?.filter(r => r.gameType === "freefire").length || 0,
+      approved: allRegistrations?.filter(r => r.gameType === "freefire" && r.status === "approved").length || 0,
+      pending: allRegistrations?.filter(r => r.gameType === "freefire" && r.status === "pending").length || 0,
+      rejected: allRegistrations?.filter(r => r.gameType === "freefire" && r.status === "rejected").length || 0,
+    },
+  ];
+
+  const modeData = [
+    {
+      name: "Solo",
+      registrations: allRegistrations?.filter(r => r.tournamentType === "solo").length || 0,
+      approved: allRegistrations?.filter(r => r.tournamentType === "solo" && r.status === "approved").length || 0,
+    },
+    {
+      name: "Duo",
+      registrations: allRegistrations?.filter(r => r.tournamentType === "duo").length || 0,
+      approved: allRegistrations?.filter(r => r.tournamentType === "duo" && r.status === "approved").length || 0,
+    },
+    {
+      name: "Squad",
+      registrations: allRegistrations?.filter(r => r.tournamentType === "squad").length || 0,
+      approved: allRegistrations?.filter(r => r.tournamentType === "squad" && r.status === "approved").length || 0,
+    },
+  ];
+
+  const revenueData = [
+    {
+      name: "BGMI Solo",
+      revenue: allRegistrations?.filter(r => r.gameType === "bgmi" && r.tournamentType === "solo" && r.status === "approved").length * TOURNAMENT_CONFIG.bgmi.solo.entryFee || 0,
+    },
+    {
+      name: "BGMI Duo",
+      revenue: allRegistrations?.filter(r => r.gameType === "bgmi" && r.tournamentType === "duo" && r.status === "approved").length * TOURNAMENT_CONFIG.bgmi.duo.entryFee || 0,
+    },
+    {
+      name: "BGMI Squad",
+      revenue: allRegistrations?.filter(r => r.gameType === "bgmi" && r.tournamentType === "squad" && r.status === "approved").length * TOURNAMENT_CONFIG.bgmi.squad.entryFee || 0,
+    },
+    {
+      name: "FF Solo",
+      revenue: allRegistrations?.filter(r => r.gameType === "freefire" && r.tournamentType === "solo" && r.status === "approved").length * TOURNAMENT_CONFIG.freefire.solo.entryFee || 0,
+    },
+    {
+      name: "FF Duo",
+      revenue: allRegistrations?.filter(r => r.gameType === "freefire" && r.tournamentType === "duo" && r.status === "approved").length * TOURNAMENT_CONFIG.freefire.duo.entryFee || 0,
+    },
+    {
+      name: "FF Squad",
+      revenue: allRegistrations?.filter(r => r.gameType === "freefire" && r.tournamentType === "squad" && r.status === "approved").length * TOURNAMENT_CONFIG.freefire.squad.entryFee || 0,
+    },
+  ].filter(item => item.revenue > 0);
+
+  // Registration trends over time (group by day)
+  const trendData = allRegistrations?.reduce((acc: any[], reg) => {
+    const date = format(startOfDay(new Date(reg.submittedAt)), "MMM dd");
+    const existing = acc.find(item => item.date === date);
+    if (existing) {
+      existing.registrations += 1;
+      if (reg.status === "approved") existing.approved += 1;
+    } else {
+      acc.push({
+        date,
+        registrations: 1,
+        approved: reg.status === "approved" ? 1 : 0,
+      });
+    }
+    return acc;
+  }, []).slice(-7) || []; // Last 7 days
+
+  const COLORS = {
+    bgmi: "hsl(var(--bgmi))",
+    freefire: "hsl(var(--freefire))",
+    primary: "hsl(var(--primary))",
+    success: "hsl(var(--success))",
+    warning: "hsl(var(--warning))",
+    destructive: "hsl(var(--destructive))",
+  };
+
   const stats = {
     total: filteredRegistrations.length,
     pending: filteredRegistrations.filter((r) => r.status === "pending").length,
@@ -538,71 +630,253 @@ export default function AdminDashboard() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          <Card data-testid="card-stat-total">
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between gap-4">
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-muted-foreground mb-1">Total Registrations</p>
-                  <p className="text-3xl font-bold" data-testid="text-total-registrations">{comprehensiveStats.totalRegistrations}</p>
-                  <p className="text-xs text-muted-foreground mt-1">All games & modes</p>
-                </div>
-                <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center">
-                  <BarChart3 className="w-6 h-6 text-primary" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card data-testid="card-stat-revenue">
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between gap-4">
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-muted-foreground mb-1">Total Revenue</p>
-                  <p className="text-3xl font-bold" data-testid="text-total-revenue">₹{comprehensiveStats.totalRevenue}</p>
-                  <p className="text-xs text-muted-foreground mt-1">From approved entries</p>
-                </div>
-                <div className="w-12 h-12 rounded-lg bg-success/10 flex items-center justify-center">
-                  <DollarSign className="w-6 h-6 text-success" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card data-testid="card-stat-pending">
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between gap-4">
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-muted-foreground mb-1">Pending Approvals</p>
-                  <div className="flex items-center gap-2">
-                    <p className="text-3xl font-bold text-warning" data-testid="text-total-pending">{comprehensiveStats.totalPending}</p>
-                    {comprehensiveStats.totalPending > 0 && (
-                      <div className="w-2 h-2 rounded-full bg-warning animate-pulse" data-testid="indicator-pending-pulse" />
-                    )}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0 }}
+          >
+            <Card data-testid="card-stat-total" className="hover-elevate">
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-muted-foreground mb-1">Total Registrations</p>
+                    <p className="text-3xl font-bold" data-testid="text-total-registrations">
+                      <CountUp end={comprehensiveStats.totalRegistrations} duration={2} />
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">All games & modes</p>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-1">Requires action</p>
+                  <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center">
+                    <BarChart3 className="w-6 h-6 text-primary" />
+                  </div>
                 </div>
-                <div className="w-12 h-12 rounded-lg bg-warning/10 flex items-center justify-center">
-                  <Clock className="w-6 h-6 text-warning" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </motion.div>
 
-          <Card data-testid="card-stat-approval-rate">
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between gap-4">
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-muted-foreground mb-1">Approval Rate</p>
-                  <p className="text-3xl font-bold text-success" data-testid="text-approval-rate">{comprehensiveStats.approvalRate}%</p>
-                  <p className="text-xs text-muted-foreground mt-1">{comprehensiveStats.totalApproved} approved</p>
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.1 }}
+          >
+            <Card data-testid="card-stat-revenue" className="hover-elevate">
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-muted-foreground mb-1">Total Revenue</p>
+                    <p className="text-3xl font-bold" data-testid="text-total-revenue">
+                      ₹<CountUp end={comprehensiveStats.totalRevenue} duration={2} />
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">From approved entries</p>
+                  </div>
+                  <div className="w-12 h-12 rounded-lg bg-success/10 flex items-center justify-center">
+                    <DollarSign className="w-6 h-6 text-success" />
+                  </div>
                 </div>
-                <div className="w-12 h-12 rounded-lg bg-success/10 flex items-center justify-center">
-                  <TrendingUp className="w-6 h-6 text-success" />
+              </CardContent>
+            </Card>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.2 }}
+          >
+            <Card data-testid="card-stat-pending" className="hover-elevate">
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-muted-foreground mb-1">Pending Approvals</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-3xl font-bold text-warning" data-testid="text-total-pending">
+                        <CountUp end={comprehensiveStats.totalPending} duration={2} />
+                      </p>
+                      {comprehensiveStats.totalPending > 0 && (
+                        <div className="w-2 h-2 rounded-full bg-warning animate-pulse" data-testid="indicator-pending-pulse" />
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">Requires action</p>
+                  </div>
+                  <div className="w-12 h-12 rounded-lg bg-warning/10 flex items-center justify-center">
+                    <Clock className="w-6 h-6 text-warning" />
+                  </div>
                 </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.3 }}
+          >
+            <Card data-testid="card-stat-approval-rate" className="hover-elevate">
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-muted-foreground mb-1">Approval Rate</p>
+                    <p className="text-3xl font-bold text-success" data-testid="text-approval-rate">
+                      <CountUp end={comprehensiveStats.approvalRate} duration={2} />%
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">{comprehensiveStats.totalApproved} approved</p>
+                  </div>
+                  <div className="w-12 h-12 rounded-lg bg-success/10 flex items-center justify-center">
+                    <TrendingUp className="w-6 h-6 text-success" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+        </div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.4 }}
+        >
+          <Card className="mb-8" data-testid="card-data-visualization">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <BarChart3 className="w-5 h-5" />
+                Data Visualization & Analytics
+              </CardTitle>
+              <CardDescription>Comprehensive insights into tournament registrations and revenue</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-8">
+              <div className="grid md:grid-cols-2 gap-6">
+                <motion.div
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.5, delay: 0.5 }}
+                  data-testid="chart-game-type"
+                >
+                  <h3 className="text-sm font-semibold mb-4">Registrations by Game Type</h3>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={gameTypeData}>
+                      <CartesianGrid strokeDasharray="3 3" opacity={0.1} />
+                      <XAxis dataKey="name" fontSize={12} />
+                      <YAxis fontSize={12} />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: "hsl(var(--card))",
+                          border: "1px solid hsl(var(--border))",
+                          borderRadius: "6px",
+                        }}
+                      />
+                      <Legend />
+                      <Bar dataKey="approved" fill={COLORS.success} name="Approved" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="pending" fill={COLORS.warning} name="Pending" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="rejected" fill={COLORS.destructive} name="Rejected" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </motion.div>
+
+                <motion.div
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.5, delay: 0.6 }}
+                  data-testid="chart-tournament-mode"
+                >
+                  <h3 className="text-sm font-semibold mb-4">Registrations by Tournament Mode</h3>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={modeData}>
+                      <CartesianGrid strokeDasharray="3 3" opacity={0.1} />
+                      <XAxis dataKey="name" fontSize={12} />
+                      <YAxis fontSize={12} />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: "hsl(var(--card))",
+                          border: "1px solid hsl(var(--border))",
+                          borderRadius: "6px",
+                        }}
+                      />
+                      <Legend />
+                      <Bar dataKey="registrations" fill={COLORS.primary} name="Total" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="approved" fill={COLORS.success} name="Approved" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </motion.div>
+
+                {trendData.length > 0 && (
+                  <motion.div
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 0.5, delay: 0.7 }}
+                    data-testid="chart-registration-trends"
+                  >
+                    <h3 className="text-sm font-semibold mb-4">Registration Trends (Last 7 Days)</h3>
+                    <ResponsiveContainer width="100%" height={300}>
+                      <LineChart data={trendData}>
+                        <CartesianGrid strokeDasharray="3 3" opacity={0.1} />
+                        <XAxis dataKey="date" fontSize={12} />
+                        <YAxis fontSize={12} />
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: "hsl(var(--card))",
+                            border: "1px solid hsl(var(--border))",
+                            borderRadius: "6px",
+                          }}
+                        />
+                        <Legend />
+                        <Line
+                          type="monotone"
+                          dataKey="registrations"
+                          stroke={COLORS.primary}
+                          strokeWidth={2}
+                          name="Total Registrations"
+                          dot={{ r: 4 }}
+                          activeDot={{ r: 6 }}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="approved"
+                          stroke={COLORS.success}
+                          strokeWidth={2}
+                          name="Approved"
+                          dot={{ r: 4 }}
+                          activeDot={{ r: 6 }}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </motion.div>
+                )}
+
+                {revenueData.length > 0 && (
+                  <motion.div
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 0.5, delay: 0.8 }}
+                    data-testid="chart-revenue-distribution"
+                  >
+                    <h3 className="text-sm font-semibold mb-4">Revenue Distribution (₹)</h3>
+                    <ResponsiveContainer width="100%" height={300}>
+                      <BarChart data={revenueData}>
+                        <CartesianGrid strokeDasharray="3 3" opacity={0.1} />
+                        <XAxis dataKey="name" fontSize={12} angle={-15} textAnchor="end" height={60} />
+                        <YAxis fontSize={12} />
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: "hsl(var(--card))",
+                            border: "1px solid hsl(var(--border))",
+                            borderRadius: "6px",
+                          }}
+                          formatter={(value: any) => `₹${value}`}
+                        />
+                        <Bar dataKey="revenue" fill={COLORS.success} name="Revenue" radius={[4, 4, 0, 0]}>
+                          {revenueData.map((entry, index) => (
+                            <Cell
+                              key={`cell-${index}`}
+                              fill={entry.name.startsWith("BGMI") ? COLORS.bgmi : COLORS.freefire}
+                            />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </motion.div>
+                )}
               </div>
             </CardContent>
           </Card>
-        </div>
+        </motion.div>
 
         <div className="grid md:grid-cols-2 gap-4 mb-8">
           <Card 
