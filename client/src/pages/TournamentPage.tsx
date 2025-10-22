@@ -463,7 +463,7 @@ export default function TournamentPage({ gameType }: TournamentPageProps) {
                     <RegistrationForm
                       gameType={gameType}
                       tournamentType={mode as TournamentType}
-                      qrCodeUrl={tournamentData.qrCodeUrl || "/attached_assets/payment-qr.jpg"}
+                      qrCodeUrl={tournamentData.qrCodeUrl || "/attached_assets/payment-qr-new.jpg"}
                       onSubmit={handleSubmit}
                       isSubmitting={createRegistrationMutation.isPending}
                     />

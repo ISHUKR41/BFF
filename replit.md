@@ -123,6 +123,10 @@ Preferred communication style: Simple, everyday language.
 
 **Admin Authentication:**
 - bcrypt for password hashing
+- **Default Admin Credentials:**
+  - Username: `admin`
+  - Password: `admin123`
+  - *Note: For production use, change these credentials immediately after deployment*
 - Session-based auth (no JWT to avoid token management complexity)
 - Protected routes using requireAdmin middleware
 - Default admin account initialized on startup
