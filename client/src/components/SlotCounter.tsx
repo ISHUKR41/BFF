@@ -118,10 +118,11 @@ export function SlotCounter({ registered, total, gameType }: SlotCounterProps) {
                   initial={{ scale: 1.2 }}
                   animate={{ scale: 1 }}
                   transition={{ duration: 0.3 }}
+                  data-testid="text-registered-count"
                 >
                   {animatedCount}
                 </motion.span>
-                <span className="text-xs text-muted-foreground">of {total}</span>
+                <span className="text-xs text-muted-foreground" data-testid="text-total-slots">of {total}</span>
               </div>
             </motion.div>
 
@@ -134,10 +135,10 @@ export function SlotCounter({ registered, total, gameType }: SlotCounterProps) {
                     <span className="text-sm font-medium text-muted-foreground">Tournament Slots</span>
                   </div>
                   <div className="flex items-baseline gap-2">
-                    <span className={`text-3xl md:text-4xl font-bold ${getStatusColor()}`}>
+                    <span className={`text-3xl md:text-4xl font-bold ${getStatusColor()}`} data-testid="text-slots-filled">
                       {animatedCount}
                     </span>
-                    <span className="text-xl md:text-2xl text-muted-foreground">/ {total}</span>
+                    <span className="text-xl md:text-2xl text-muted-foreground" data-testid="text-slots-total">/ {total}</span>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -154,10 +155,10 @@ export function SlotCounter({ registered, total, gameType }: SlotCounterProps) {
 
               {/* Progress bar with percentage */}
               <div className="space-y-2">
-                <Progress value={percentage} className="h-2" indicatorClassName={getProgressColor()} />
+                <Progress value={percentage} className="h-2" indicatorClassName={getProgressColor()} data-testid="progress-slots" />
                 <div className="flex justify-between text-xs text-muted-foreground">
-                  <span>{percentage.toFixed(0)}% filled</span>
-                  <span>{available > 0 ? `${available} slots left` : "Tournament full"}</span>
+                  <span data-testid="text-percentage-filled">{percentage.toFixed(0)}% filled</span>
+                  <span data-testid="text-slots-remaining">{available > 0 ? `${available} slots left` : "Tournament full"}</span>
                 </div>
               </div>
 

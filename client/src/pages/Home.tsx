@@ -152,22 +152,22 @@ export default function Home() {
                     <CardTitle className="text-2xl mb-2">BGMI</CardTitle>
                     <CardDescription className="text-base">Battlegrounds Mobile India - The ultimate battle royale experience</CardDescription>
                   </div>
-                  <Badge className="bg-bgmi/10 text-bgmi hover:bg-bgmi/20 border-bgmi/20">Featured</Badge>
+                  <Badge className="bg-bgmi/10 text-bgmi hover:bg-bgmi/20 border-bgmi/20" data-testid="badge-bgmi-featured">Featured</Badge>
                 </div>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="grid grid-cols-3 gap-4">
-                  <div className="text-center p-4 rounded-lg bg-muted/50">
+                  <div className="text-center p-4 rounded-lg bg-muted/50" data-testid="card-bgmi-solo-mode">
                     <Users className="w-5 h-5 mx-auto mb-2 text-bgmi" />
                     <div className="text-sm font-semibold">Solo</div>
                     <div className="text-xs text-muted-foreground mt-1">100 Slots</div>
                   </div>
-                  <div className="text-center p-4 rounded-lg bg-muted/50">
+                  <div className="text-center p-4 rounded-lg bg-muted/50" data-testid="card-bgmi-duo-mode">
                     <Users className="w-5 h-5 mx-auto mb-2 text-bgmi" />
                     <div className="text-sm font-semibold">Duo</div>
                     <div className="text-xs text-muted-foreground mt-1">50 Teams</div>
                   </div>
-                  <div className="text-center p-4 rounded-lg bg-muted/50">
+                  <div className="text-center p-4 rounded-lg bg-muted/50" data-testid="card-bgmi-squad-mode">
                     <Shield className="w-5 h-5 mx-auto mb-2 text-bgmi" />
                     <div className="text-sm font-semibold">Squad</div>
                     <div className="text-xs text-muted-foreground mt-1">25 Teams</div>
@@ -175,15 +175,15 @@ export default function Home() {
                 </div>
 
                 <div className="space-y-3">
-                  <div className="flex items-center justify-between text-sm">
+                  <div className="flex items-center justify-between text-sm" data-testid="text-bgmi-entry-fee">
                     <span className="text-muted-foreground">Entry Fee</span>
                     <span className="font-semibold">₹20 - ₹80</span>
                   </div>
-                  <div className="flex items-center justify-between text-sm">
+                  <div className="flex items-center justify-between text-sm" data-testid="text-bgmi-winner-prize">
                     <span className="text-muted-foreground">Winner Prize</span>
                     <span className="font-semibold text-success">₹350</span>
                   </div>
-                  <div className="flex items-center justify-between text-sm">
+                  <div className="flex items-center justify-between text-sm" data-testid="text-bgmi-per-kill">
                     <span className="text-muted-foreground">Per Kill</span>
                     <span className="font-semibold">₹9</span>
                   </div>
@@ -222,22 +222,22 @@ export default function Home() {
                     <CardTitle className="text-2xl mb-2">Free Fire</CardTitle>
                     <CardDescription className="text-base">Fast-paced 10-minute battle royale action</CardDescription>
                   </div>
-                  <Badge className="bg-freefire/10 text-freefire hover:bg-freefire/20 border-freefire/20">Popular</Badge>
+                  <Badge className="bg-freefire/10 text-freefire hover:bg-freefire/20 border-freefire/20" data-testid="badge-freefire-popular">Popular</Badge>
                 </div>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="grid grid-cols-3 gap-4">
-                  <div className="text-center p-4 rounded-lg bg-muted/50">
+                  <div className="text-center p-4 rounded-lg bg-muted/50" data-testid="card-freefire-solo-mode">
                     <Users className="w-5 h-5 mx-auto mb-2 text-freefire" />
                     <div className="text-sm font-semibold">Solo</div>
                     <div className="text-xs text-muted-foreground mt-1">48 Slots</div>
                   </div>
-                  <div className="text-center p-4 rounded-lg bg-muted/50">
+                  <div className="text-center p-4 rounded-lg bg-muted/50" data-testid="card-freefire-duo-mode">
                     <Users className="w-5 h-5 mx-auto mb-2 text-freefire" />
                     <div className="text-sm font-semibold">Duo</div>
                     <div className="text-xs text-muted-foreground mt-1">24 Teams</div>
                   </div>
-                  <div className="text-center p-4 rounded-lg bg-muted/50">
+                  <div className="text-center p-4 rounded-lg bg-muted/50" data-testid="card-freefire-squad-mode">
                     <Shield className="w-5 h-5 mx-auto mb-2 text-freefire" />
                     <div className="text-sm font-semibold">Squad</div>
                     <div className="text-xs text-muted-foreground mt-1">12 Teams</div>
@@ -245,15 +245,15 @@ export default function Home() {
                 </div>
 
                 <div className="space-y-3">
-                  <div className="flex items-center justify-between text-sm">
+                  <div className="flex items-center justify-between text-sm" data-testid="text-freefire-entry-fee">
                     <span className="text-muted-foreground">Entry Fee</span>
                     <span className="font-semibold">₹20 - ₹80</span>
                   </div>
-                  <div className="flex items-center justify-between text-sm">
+                  <div className="flex items-center justify-between text-sm" data-testid="text-freefire-winner-prize">
                     <span className="text-muted-foreground">Winner Prize</span>
                     <span className="font-semibold text-success">₹350</span>
                   </div>
-                  <div className="flex items-center justify-between text-sm">
+                  <div className="flex items-center justify-between text-sm" data-testid="text-freefire-per-kill">
                     <span className="text-muted-foreground">Per Kill</span>
                     <span className="font-semibold">₹5</span>
                   </div>

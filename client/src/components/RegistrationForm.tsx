@@ -531,7 +531,7 @@ export function RegistrationForm({ gameType, tournamentType, qrCodeUrl, onSubmit
                 <div className="space-y-4 p-6 rounded-lg bg-primary/5 border-2 border-primary/20">
                   <h3 className="text-lg font-semibold">Payment Details</h3>
                   <div className="space-y-4">
-                    <div className="flex items-center justify-between p-4 rounded-md bg-background border border-border">
+                    <div className="flex items-center justify-between p-4 rounded-md bg-background border border-border" data-testid="text-entry-fee-display">
                       <span className="text-sm font-medium">Entry Fee</span>
                       <span className="text-xl font-bold text-primary">₹{config.entryFee}</span>
                     </div>
@@ -540,7 +540,7 @@ export function RegistrationForm({ gameType, tournamentType, qrCodeUrl, onSubmit
                       <div className="text-center space-y-2">
                         <Label>Scan QR Code to Pay</Label>
                         <div className="inline-block p-4 rounded-lg bg-white">
-                          <img src={qrCodeUrl} alt="Payment QR Code" className="w-48 h-48 mx-auto" />
+                          <img src={qrCodeUrl} alt="Payment QR Code" className="w-48 h-48 mx-auto" data-testid="img-payment-qr" />
                         </div>
                       </div>
                     )}

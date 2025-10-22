@@ -62,54 +62,7 @@ export default function AdminDashboard() {
     enabled: !!authStatus?.authenticated,
   });
 
-  if (authLoading || !authStatus?.authenticated) {
-    return (
-      <div className="min-h-screen bg-background pt-20 pb-16">
-        <div className="max-w-7xl mx-auto px-4 md:px-6 lg:px-8">
-          <Skeleton className="h-12 w-64 mb-4" />
-          <Skeleton className="h-6 w-96 mb-8" />
-          <Skeleton className="h-48 w-full" />
-        </div>
-      </div>
-    );
-  }
-
-  const filteredRegistrations = (allRegistrations || []).filter((reg) => {
-    if (reg.gameType !== selectedGame) return false;
-    if (reg.tournamentType !== activeMode) return false;
-    if (statusFilter !== "all" && reg.status !== statusFilter) return false;
-    return true;
-  });
-
-  const comprehensiveStats = {
-    totalRegistrations: allRegistrations?.length || 0,
-    totalRevenue: allRegistrations?.reduce((sum, reg) => {
-      if (reg.status === "approved") {
-        const config = TOURNAMENT_CONFIG[reg.gameType as keyof typeof TOURNAMENT_CONFIG][reg.tournamentType as keyof typeof TOURNAMENT_CONFIG.bgmi];
-        return sum + config.entryFee;
-      }
-      return sum;
-    }, 0) || 0,
-    totalPending: allRegistrations?.filter(r => r.status === "pending").length || 0,
-    totalApproved: allRegistrations?.filter(r => r.status === "approved").length || 0,
-    approvalRate: allRegistrations && allRegistrations.length > 0 
-      ? Math.round((allRegistrations.filter(r => r.status === "approved").length / allRegistrations.length) * 100)
-      : 0,
-  };
-
-  const stats = {
-    total: filteredRegistrations.length,
-    pending: filteredRegistrations.filter((r) => r.status === "pending").length,
-    approved: filteredRegistrations.filter((r) => r.status === "approved").length,
-    rejected: filteredRegistrations.filter((r) => r.status === "rejected").length,
-  };
-
-  const totalPages = Math.ceil(filteredRegistrations.length / ITEMS_PER_PAGE);
-  const paginatedRegistrations = filteredRegistrations.slice(
-    (currentPage - 1) * ITEMS_PER_PAGE,
-    currentPage * ITEMS_PER_PAGE
-  );
-
+  // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
   }, [selectedGame, activeMode, statusFilter]);
@@ -486,6 +439,56 @@ export default function AdminDashboard() {
       .toUpperCase()
       .slice(0, 2);
   };
+
+  // Early return for auth check
+  if (authLoading || !authStatus?.authenticated) {
+    return (
+      <div className="min-h-screen bg-background pt-20 pb-16">
+        <div className="max-w-7xl mx-auto px-4 md:px-6 lg:px-8">
+          <Skeleton className="h-12 w-64 mb-4" />
+          <Skeleton className="h-6 w-96 mb-8" />
+          <Skeleton className="h-48 w-full" />
+        </div>
+      </div>
+    );
+  }
+
+  // Calculate filtered registrations and stats
+  const filteredRegistrations = (allRegistrations || []).filter((reg) => {
+    if (reg.gameType !== selectedGame) return false;
+    if (reg.tournamentType !== activeMode) return false;
+    if (statusFilter !== "all" && reg.status !== statusFilter) return false;
+    return true;
+  });
+
+  const comprehensiveStats = {
+    totalRegistrations: allRegistrations?.length || 0,
+    totalRevenue: allRegistrations?.reduce((sum, reg) => {
+      if (reg.status === "approved") {
+        const config = TOURNAMENT_CONFIG[reg.gameType as keyof typeof TOURNAMENT_CONFIG][reg.tournamentType as keyof typeof TOURNAMENT_CONFIG.bgmi];
+        return sum + config.entryFee;
+      }
+      return sum;
+    }, 0) || 0,
+    totalPending: allRegistrations?.filter(r => r.status === "pending").length || 0,
+    totalApproved: allRegistrations?.filter(r => r.status === "approved").length || 0,
+    approvalRate: allRegistrations && allRegistrations.length > 0 
+      ? Math.round((allRegistrations.filter(r => r.status === "approved").length / allRegistrations.length) * 100)
+      : 0,
+  };
+
+  const stats = {
+    total: filteredRegistrations.length,
+    pending: filteredRegistrations.filter((r) => r.status === "pending").length,
+    approved: filteredRegistrations.filter((r) => r.status === "approved").length,
+    rejected: filteredRegistrations.filter((r) => r.status === "rejected").length,
+  };
+
+  const totalPages = Math.ceil(filteredRegistrations.length / ITEMS_PER_PAGE);
+  const paginatedRegistrations = filteredRegistrations.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
 
   if (isLoading) {
     return (

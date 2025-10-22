@@ -74,9 +74,9 @@ function CountdownTimer({ gameType }: { gameType: GameType }) {
         </div>
         <div className="flex gap-2">
           {[
-            { value: timeLeft.hours, label: 'Hours' },
-            { value: timeLeft.minutes, label: 'Minutes' },
-            { value: timeLeft.seconds, label: 'Seconds' }
+            { value: timeLeft.hours, label: 'Hours', testId: 'countdown-hours' },
+            { value: timeLeft.minutes, label: 'Minutes', testId: 'countdown-minutes' },
+            { value: timeLeft.seconds, label: 'Seconds', testId: 'countdown-seconds' }
           ].map((item, idx) => (
             <div key={idx}>
               <motion.div
@@ -85,6 +85,7 @@ function CountdownTimer({ gameType }: { gameType: GameType }) {
                 animate={{ scale: 1 }}
                 transition={{ duration: 0.2 }}
                 className={`${gameBg} ${gameBorder} border rounded-md px-3 py-2 min-w-[60px] text-center`}
+                data-testid={item.testId}
               >
                 <div className={`text-2xl font-bold ${gameColor}`}>
                   {String(item.value).padStart(2, '0')}
