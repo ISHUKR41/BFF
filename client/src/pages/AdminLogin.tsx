@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Shield, Loader2 } from "lucide-react";
+import { Shield, Loader2, Info } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 
@@ -32,10 +32,8 @@ export default function AdminLogin() {
 
   const loginMutation = useMutation({
     mutationFn: async (data: LoginFormData) => {
-      return await apiRequest("/api/admin/login", {
-        method: "POST",
-        body: JSON.stringify(data),
-      });
+      const res = await apiRequest("POST", "/api/admin/login", data);
+      return await res.json();
     },
     onSuccess: () => {
       toast({
@@ -124,6 +122,31 @@ export default function AdminLogin() {
               <p className="text-xs text-muted-foreground text-center">
                 Protected admin area. Unauthorized access is prohibited.
               </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Default Credentials Info */}
+        <Card className="mt-6 border-primary/20 bg-primary/5">
+          <CardContent className="pt-6">
+            <div className="flex gap-3">
+              <Info className="w-5 h-5 text-primary shrink-0 mt-0.5" />
+              <div className="space-y-2">
+                <p className="text-sm font-semibold text-foreground">Default Admin Credentials</p>
+                <div className="space-y-1 text-sm">
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground">Username:</span>
+                    <code className="px-2 py-1 rounded bg-muted text-foreground font-mono text-xs">admin</code>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground">Password:</span>
+                    <code className="px-2 py-1 rounded bg-muted text-foreground font-mono text-xs">admin123</code>
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Use these credentials for first-time access
+                </p>
+              </div>
             </div>
           </CardContent>
         </Card>

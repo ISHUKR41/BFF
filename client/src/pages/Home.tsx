@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import bgmiCardImage from "@assets/generated_images/BGMI_game_card_image_01a91a4f.png";
 import freeFireCardImage from "@assets/generated_images/Free_Fire_game_card_image_cf60f82b.png";
+import { motion } from "framer-motion";
 
 export default function Home() {
   return (
@@ -17,23 +18,43 @@ export default function Home() {
         
         <div className="relative max-w-7xl mx-auto px-4 md:px-6 lg:px-8">
           <div className="text-center space-y-8">
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20">
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5 }}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20"
+            >
               <Zap className="w-4 h-4 text-primary" />
               <span className="text-sm font-medium text-primary">Join India's Most Professional Gaming Tournaments</span>
-            </div>
+            </motion.div>
             
-            <h1 className="text-5xl md:text-7xl font-bold tracking-tight leading-none">
+            <motion.h1 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.1 }}
+              className="text-5xl md:text-7xl font-bold tracking-tight leading-none"
+            >
               Compete in <br />
               <span className="bg-gradient-to-r from-bgmi via-primary to-freefire bg-clip-text text-transparent">
                 BGMI & Free Fire
               </span>
-            </h1>
+            </motion.h1>
             
-            <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed">
+            <motion.p 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.2 }}
+              className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed"
+            >
               Professional tournaments with real-time slot tracking, secure payments, and exciting prize pools. Register now and showcase your skills!
-            </p>
+            </motion.p>
             
-            <div className="flex flex-wrap items-center justify-center gap-4">
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.3 }}
+              className="flex flex-wrap items-center justify-center gap-4"
+            >
               <Link href="/bgmi" data-testid="button-bgmi-cta">
                 <Button size="lg" className="gap-2 text-base font-semibold h-12 px-8 bg-bgmi hover:bg-bgmi/90 text-white">
                   Join BGMI Tournament
@@ -46,10 +67,15 @@ export default function Home() {
                   <ArrowRight className="w-5 h-5" />
                 </Button>
               </Link>
-            </div>
+            </motion.div>
 
             {/* Quick Stats */}
-            <div className="grid grid-cols-3 gap-4 md:gap-8 max-w-2xl mx-auto pt-8">
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.4 }}
+              className="grid grid-cols-3 gap-4 md:gap-8 max-w-2xl mx-auto pt-8"
+            >
               <div className="text-center">
                 <div className="text-3xl md:text-4xl font-bold text-foreground">₹350</div>
                 <div className="text-xs md:text-sm text-muted-foreground mt-1">Winner Prize</div>
@@ -62,7 +88,7 @@ export default function Home() {
                 <div className="text-3xl md:text-4xl font-bold text-foreground">Live</div>
                 <div className="text-xs md:text-sm text-muted-foreground mt-1">Real-time Slots</div>
               </div>
-            </div>
+            </motion.div>
           </div>
         </div>
       </section>
@@ -77,6 +103,12 @@ export default function Home() {
 
           <div className="grid md:grid-cols-2 gap-8">
             {/* BGMI Card */}
+            <motion.div
+              initial={{ opacity: 0, x: -50 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5 }}
+            >
             <Card className="relative overflow-hidden hover-elevate transition-all duration-200" data-testid="card-bgmi">
               <div className="absolute top-0 right-0 w-32 h-32 bg-bgmi/10 rounded-full blur-3xl" />
               <div className="relative h-48 overflow-hidden rounded-t-lg">
@@ -138,8 +170,15 @@ export default function Home() {
                 </Link>
               </CardContent>
             </Card>
+            </motion.div>
 
             {/* Free Fire Card */}
+            <motion.div
+              initial={{ opacity: 0, x: 50 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5 }}
+            >
             <Card className="relative overflow-hidden hover-elevate transition-all duration-200" data-testid="card-freefire">
               <div className="absolute top-0 right-0 w-32 h-32 bg-freefire/10 rounded-full blur-3xl" />
               <div className="relative h-48 overflow-hidden rounded-t-lg">
@@ -201,6 +240,7 @@ export default function Home() {
                 </Link>
               </CardContent>
             </Card>
+            </motion.div>
           </div>
         </div>
       </section>
