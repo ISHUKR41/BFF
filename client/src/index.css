@@ -52,6 +52,15 @@
 
   --primary-foreground: 0 0% 100%;
 
+  --bgmi: 25 95% 58%;
+  --bgmi-foreground: 0 0% 100%;
+
+  --freefire: 0 85% 60%;
+  --freefire-foreground: 0 0% 100%;
+
+  --success: 142 76% 45%;
+  --success-foreground: 0 0% 100%;
+
   --secondary: 220 12% 90%;
 
   --secondary-foreground: 220 15% 12%;
@@ -169,6 +178,15 @@
   --primary: 215 90% 60%;
 
   --primary-foreground: 220 15% 8%;
+
+  --bgmi: 25 95% 58%;
+  --bgmi-foreground: 220 15% 8%;
+
+  --freefire: 0 85% 60%;
+  --freefire-foreground: 0 0% 100%;
+
+  --success: 142 76% 55%;
+  --success-foreground: 220 15% 8%;
 
   --secondary: 220 12% 20%;
 
