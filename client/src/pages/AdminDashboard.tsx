@@ -11,12 +11,15 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
-import { Shield, LogOut, Check, X, ExternalLink, RefreshCw, Users, Trophy, Download, BarChart3, CheckCircle2, Clock, XCircle, QrCode, Upload, DollarSign, TrendingUp, Printer, CheckCircle, Image as ImageIcon } from "lucide-react";
+import { Shield, LogOut, Check, X, ExternalLink, RefreshCw, Users, Trophy, Download, BarChart3, CheckCircle2, Clock, XCircle, QrCode, Upload, DollarSign, TrendingUp, Printer, CheckCircle, Image as ImageIcon, Copy } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { type Registration, type Tournament, TOURNAMENT_CONFIG } from "@shared/schema";
 import { formatDistanceToNow } from "date-fns";
 import * as XLSX from "xlsx";
+import copy from "copy-to-clipboard";
+import Lightbox from "yet-another-react-lightbox";
+import "yet-another-react-lightbox/styles.css";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -32,6 +35,8 @@ export default function AdminDashboard() {
   const [approveAllDialogOpen, setApproveAllDialogOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedRegistrations, setSelectedRegistrations] = useState<Set<string>>(new Set());
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxImage, setLightboxImage] = useState<string>("");
   const { toast } = useToast();
 
   const { data: authStatus, isLoading: authLoading } = useQuery<{ authenticated: boolean }>({
@@ -438,6 +443,19 @@ export default function AdminDashboard() {
       .join('')
       .toUpperCase()
       .slice(0, 2);
+  };
+
+  const handleCopy = (text: string, label: string) => {
+    copy(text);
+    toast({
+      title: "Copied!",
+      description: `${label} copied to clipboard`,
+    });
+  };
+
+  const handleViewImage = (imageUrl: string) => {
+    setLightboxImage(imageUrl);
+    setLightboxOpen(true);
   };
 
   // Early return for auth check
@@ -969,9 +987,19 @@ export default function AdminDashboard() {
                           <div className="grid md:grid-cols-2 gap-4">
                             <div>
                               <p className="text-xs text-muted-foreground mb-1">Transaction ID</p>
-                              <p className="font-mono text-sm font-semibold text-primary" data-testid={`text-transaction-id-${registration.id}`}>
-                                {registration.transactionId}
-                              </p>
+                              <div className="flex items-center gap-2">
+                                <p className="font-mono text-sm font-semibold text-primary flex-1" data-testid={`text-transaction-id-${registration.id}`}>
+                                  {registration.transactionId}
+                                </p>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleCopy(registration.transactionId, "Transaction ID")}
+                                  data-testid={`button-copy-transaction-${registration.id}`}
+                                >
+                                  <Copy className="w-4 h-4" />
+                                </Button>
+                              </div>
                             </div>
                             {registration.paymentScreenshot && (
                               <div>
@@ -980,7 +1008,7 @@ export default function AdminDashboard() {
                                   variant="outline"
                                   size="sm"
                                   className="gap-2"
-                                  onClick={() => setSelectedImage(registration.paymentScreenshot || null)}
+                                  onClick={() => handleViewImage(registration.paymentScreenshot || "")}
                                   data-testid={`button-view-screenshot-${registration.id}`}
                                 >
                                   <ExternalLink className="w-4 h-4" />
@@ -1168,23 +1196,11 @@ export default function AdminDashboard() {
           </AlertDialogContent>
         </AlertDialog>
 
-        <Dialog open={!!selectedImage} onOpenChange={() => setSelectedImage(null)}>
-          <DialogContent className="sm:max-w-2xl" data-testid="dialog-payment-screenshot">
-            <DialogHeader>
-              <DialogTitle>Payment Screenshot</DialogTitle>
-            </DialogHeader>
-            {selectedImage && (
-              <div className="mt-4">
-                <img 
-                  src={selectedImage} 
-                  alt="Payment Screenshot" 
-                  className="w-full rounded-lg"
-                  data-testid="img-payment-screenshot"
-                />
-              </div>
-            )}
-          </DialogContent>
-        </Dialog>
+        <Lightbox
+          open={lightboxOpen}
+          close={() => setLightboxOpen(false)}
+          slides={[{ src: lightboxImage }]}
+        />
       </div>
     </div>
   );

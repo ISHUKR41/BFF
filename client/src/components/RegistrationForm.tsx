@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { PatternFormat } from "react-number-format";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -236,6 +237,39 @@ export function RegistrationForm({ gameType, tournamentType, qrCodeUrl, onSubmit
     return !!value && !error && value.toString().length > 0;
   };
 
+  const canProceedToStep2 = (): boolean => {
+    // Check all required fields for step 1
+    const requiredFields: (keyof FormData)[] = ["playerName", "gameId", "whatsapp"];
+    
+    // Add team name for duo/squad
+    if (tournamentType !== "solo") {
+      requiredFields.push("teamName");
+    }
+    
+    // Add player 2 for duo/squad
+    if (config.maxPlayers >= 2) {
+      requiredFields.push("player2Name", "player2GameId");
+    }
+    
+    // Add player 3 for squad
+    if (config.maxPlayers >= 3) {
+      requiredFields.push("player3Name", "player3GameId");
+    }
+    
+    // Add player 4 for squad
+    if (config.maxPlayers >= 4) {
+      requiredFields.push("player4Name", "player4GameId");
+    }
+    
+    // Check if all required fields are valid
+    return requiredFields.every(fieldName => isFieldValid(fieldName));
+  };
+
+  const canProceedToStep3 = (): boolean => {
+    // Transaction ID is required for step 2
+    return isFieldValid("transactionId");
+  };
+
   const steps = [
     { number: 1, title: "Team/Player Details", completed: currentStep > 1 },
     { number: 2, title: "Payment Details", completed: currentStep > 2 },
@@ -375,7 +409,17 @@ export function RegistrationForm({ gameType, tournamentType, qrCodeUrl, onSubmit
                           </Tooltip>
                         </FormLabel>
                         <FormControl>
-                          <Input {...field} placeholder="Enter WhatsApp number" data-testid="input-whatsapp" />
+                          <PatternFormat
+                            {...field}
+                            format="+91 ##### #####"
+                            mask="_"
+                            placeholder="+91 XXXXX XXXXX"
+                            customInput={Input}
+                            data-testid="input-whatsapp"
+                            onValueChange={(values) => {
+                              field.onChange(values.value);
+                            }}
+                          />
                         </FormControl>
                         <FormDescription>We'll send match details here</FormDescription>
                         <FormMessage />
@@ -518,10 +562,16 @@ export function RegistrationForm({ gameType, tournamentType, qrCodeUrl, onSubmit
                   className="w-full"
                   size="lg"
                   onClick={() => setCurrentStep(2)}
+                  disabled={!canProceedToStep2()}
                   data-testid="button-next-step"
                 >
                   Continue to Payment
                 </Button>
+                {!canProceedToStep2() && (
+                  <p className="text-sm text-muted-foreground text-center">
+                    Please fill in all required fields to continue
+                  </p>
+                )}
               </div>
             )}
 
@@ -674,7 +724,7 @@ export function RegistrationForm({ gameType, tournamentType, qrCodeUrl, onSubmit
                     type="submit"
                     className="flex-1"
                     size="lg"
-                    disabled={isSubmitting}
+                    disabled={isSubmitting || !canProceedToStep3()}
                     data-testid="button-submit-registration"
                   >
                     {isSubmitting ? (

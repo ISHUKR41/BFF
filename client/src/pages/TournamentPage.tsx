@@ -14,6 +14,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { SlotCounter } from "@/components/SlotCounter";
 import { RegistrationForm } from "@/components/RegistrationForm";
+import { TournamentFullAlert } from "@/components/TournamentFullAlert";
 import { type GameType, type TournamentType, type Tournament, TOURNAMENT_CONFIG } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -228,15 +229,9 @@ export default function TournamentPage({ gameType }: TournamentPageProps) {
               className="flex items-center justify-center gap-4 mb-6"
             >
               <motion.div
-                animate={{ 
-                  rotate: [0, 10, -10, 0],
-                  scale: [1, 1.1, 1]
-                }}
-                transition={{ 
-                  duration: 2,
-                  repeat: Infinity,
-                  repeatDelay: 3
-                }}
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.5 }}
               >
                 <Trophy className={`w-12 h-12 md:w-16 md:h-16 ${gameColor}`} data-testid="icon-trophy-hero" />
               </motion.div>
@@ -463,7 +458,7 @@ export default function TournamentPage({ gameType }: TournamentPageProps) {
                     </Card>
                   </motion.div>
 
-                  {/* Registration Form */}
+                  {/* Registration Form or Full Alert */}
                   {tournamentData.registeredCount < tournamentData.maxSlots ? (
                     <RegistrationForm
                       gameType={gameType}
@@ -473,17 +468,7 @@ export default function TournamentPage({ gameType }: TournamentPageProps) {
                       isSubmitting={createRegistrationMutation.isPending}
                     />
                   ) : (
-                    <Card className="border-destructive/50">
-                      <CardContent className="pt-6">
-                        <div className="text-center py-8 space-y-4">
-                          <AlertCircle className="w-16 h-16 mx-auto text-destructive" />
-                          <h3 className="text-2xl font-bold">Tournament Full</h3>
-                          <p className="text-muted-foreground">
-                            All slots for this tournament have been filled. Please check other modes or try again later.
-                          </p>
-                        </div>
-                      </CardContent>
-                    </Card>
+                    <TournamentFullAlert gameType={gameType} />
                   )}
                 </div>
 

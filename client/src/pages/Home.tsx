@@ -40,18 +40,9 @@ export default function Home() {
               transition={{ duration: 0.6 }}
               className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20"
             >
-              <motion.div
-                animate={{ 
-                  y: [0, -3, 0],
-                }}
-                transition={{ 
-                  duration: 2,
-                  repeat: Infinity,
-                  ease: "easeInOut"
-                }}
-              >
+              <div className="flex items-center justify-center">
                 <Zap className="w-4 h-4 text-primary" />
-              </motion.div>
+              </div>
               <span className="text-sm font-medium text-primary">Join India's Most Professional Gaming Tournaments</span>
             </motion.div>
             

@@ -64,7 +64,7 @@ export class MemStorage implements IStorage {
   }
 
   private initializeTournaments() {
-    // Default QR code URL (using attached assets)
+    // Default QR code URL (using uploaded payment QR image)
     const defaultQR = "/attached_assets/payment-qr.jpg";
     
     // Initialize BGMI tournaments
