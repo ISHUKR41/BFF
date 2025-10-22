@@ -11,6 +11,8 @@ import { RegistrationForm } from "@/components/RegistrationForm";
 import { type GameType, type TournamentType, type Tournament, TOURNAMENT_CONFIG } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import bgmiBanner from "@assets/generated_images/BGMI_tournament_hero_banner_fb19ed0b.png";
+import freeFireBanner from "@assets/generated_images/Free_Fire_tournament_hero_banner_e185d070.png";
 
 interface TournamentPageProps {
   gameType: GameType;
@@ -39,10 +41,8 @@ export default function TournamentPage({ gameType }: TournamentPageProps) {
   // Create registration mutation
   const createRegistrationMutation = useMutation({
     mutationFn: async (data: any) => {
-      return await apiRequest("/api/registrations", {
-        method: "POST",
-        body: JSON.stringify(data),
-      });
+      const res = await apiRequest("POST", "/api/registrations", data);
+      return await res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/tournaments"] });
@@ -91,19 +91,34 @@ export default function TournamentPage({ gameType }: TournamentPageProps) {
     }
   };
 
+  const bannerImage = gameType === "bgmi" ? bgmiBanner : freeFireBanner;
+
   return (
     <div className="min-h-screen bg-background pt-20 pb-16">
-      <div className="max-w-7xl mx-auto px-4 md:px-6 lg:px-8">
-        {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-center gap-3 mb-4">
-            <Trophy className={`w-8 h-8 text-${gameColor}`} />
-            <h1 className="text-4xl md:text-5xl font-bold tracking-tight">{gameTitle} Tournament</h1>
+      {/* Hero Banner */}
+      <div className="relative h-64 md:h-80 overflow-hidden mb-8">
+        <img 
+          src={bannerImage} 
+          alt={`${gameTitle} Tournament Banner`}
+          className="w-full h-full object-cover"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-background via-background/80 to-background/40" />
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className="text-center">
+            <div className="flex items-center justify-center gap-3 mb-4">
+              <Trophy className={`w-10 h-10 md:w-12 md:h-12 text-${gameColor}`} />
+              <h1 className="text-4xl md:text-6xl font-bold tracking-tight text-white drop-shadow-lg">
+                {gameTitle} Tournament
+              </h1>
+            </div>
+            <p className="text-lg md:text-xl text-white/90 drop-shadow-md max-w-2xl mx-auto px-4">
+              Choose your tournament mode and register to compete with the best players
+            </p>
           </div>
-          <p className="text-lg text-muted-foreground">
-            Choose your tournament mode and register to compete with the best players
-          </p>
         </div>
+      </div>
+
+      <div className="max-w-7xl mx-auto px-4 md:px-6 lg:px-8">
 
         {/* Tournament Modes Tabs */}
         <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as TournamentType)} className="space-y-8">

@@ -3,6 +3,8 @@ import { Trophy, Users, Target, Zap, Shield, Award, ArrowRight } from "lucide-re
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import bgmiCardImage from "@assets/generated_images/BGMI_game_card_image_01a91a4f.png";
+import freeFireCardImage from "@assets/generated_images/Free_Fire_game_card_image_cf60f82b.png";
 
 export default function Home() {
   return (
@@ -77,6 +79,14 @@ export default function Home() {
             {/* BGMI Card */}
             <Card className="relative overflow-hidden hover-elevate transition-all duration-200" data-testid="card-bgmi">
               <div className="absolute top-0 right-0 w-32 h-32 bg-bgmi/10 rounded-full blur-3xl" />
+              <div className="relative h-48 overflow-hidden rounded-t-lg">
+                <img 
+                  src={bgmiCardImage} 
+                  alt="BGMI Tournament" 
+                  className="w-full h-full object-cover"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-card via-card/60 to-transparent" />
+              </div>
               <CardHeader>
                 <div className="flex items-start justify-between">
                   <div>
@@ -132,6 +142,14 @@ export default function Home() {
             {/* Free Fire Card */}
             <Card className="relative overflow-hidden hover-elevate transition-all duration-200" data-testid="card-freefire">
               <div className="absolute top-0 right-0 w-32 h-32 bg-freefire/10 rounded-full blur-3xl" />
+              <div className="relative h-48 overflow-hidden rounded-t-lg">
+                <img 
+                  src={freeFireCardImage} 
+                  alt="Free Fire Tournament" 
+                  className="w-full h-full object-cover"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-card via-card/60 to-transparent" />
+              </div>
               <CardHeader>
                 <div className="flex items-start justify-between">
                   <div>
