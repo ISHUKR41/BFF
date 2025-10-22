@@ -64,6 +64,9 @@ export class MemStorage implements IStorage {
   }
 
   private initializeTournaments() {
+    // Default QR code URL (using attached assets)
+    const defaultQR = "/attached_assets/payment-qr.jpg";
+    
     // Initialize BGMI tournaments
     ["solo", "duo", "squad"].forEach((type) => {
       const tournamentType = type as TournamentType;
@@ -75,7 +78,7 @@ export class MemStorage implements IStorage {
         tournamentType,
         registeredCount: 0,
         maxSlots: config.maxSlots,
-        qrCodeUrl: null,
+        qrCodeUrl: defaultQR,
         isActive: 1,
       };
       this.tournaments.set(key, tournament);
@@ -92,7 +95,7 @@ export class MemStorage implements IStorage {
         tournamentType,
         registeredCount: 0,
         maxSlots: config.maxSlots,
-        qrCodeUrl: null,
+        qrCodeUrl: defaultQR,
         isActive: 1,
       };
       this.tournaments.set(key, tournament);

@@ -11,8 +11,8 @@ import { RegistrationForm } from "@/components/RegistrationForm";
 import { type GameType, type TournamentType, type Tournament, TOURNAMENT_CONFIG } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import bgmiBanner from "@assets/generated_images/BGMI_tournament_hero_banner_fb19ed0b.png";
-import freeFireBanner from "@assets/generated_images/Free_Fire_tournament_hero_banner_e185d070.png";
+import bgmiBanner from "@assets/generated_images/BGMI_tournament_hero_banner_b2150cce.png";
+import freeFireBanner from "@assets/generated_images/Free_Fire_tournament_hero_banner_dddd7ca1.png";
 
 interface TournamentPageProps {
   gameType: GameType;
