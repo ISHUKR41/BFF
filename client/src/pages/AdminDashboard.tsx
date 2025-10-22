@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Shield, LogOut, Check, X, ExternalLink, RefreshCw, Users, Trophy, Download, BarChart3, CheckCircle2, Clock, XCircle } from "lucide-react";
+import { Shield, LogOut, Check, X, ExternalLink, RefreshCw, Users, Trophy, Download, BarChart3, CheckCircle2, Clock, XCircle, QrCode, Upload } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { type Registration, TOURNAMENT_CONFIG } from "@shared/schema";
@@ -20,6 +20,8 @@ export default function AdminDashboard() {
   const [activeMode, setActiveMode] = useState<"solo" | "duo" | "squad">("solo");
   const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "approved" | "rejected">("all");
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [qrDialogOpen, setQrDialogOpen] = useState(false);
+  const [qrImagePreview, setQrImagePreview] = useState<string | null>(null);
   const { toast } = useToast();
 
   // Check authentication
@@ -134,6 +136,32 @@ export default function AdminDashboard() {
     },
   });
 
+  // Update QR code mutation
+  const updateQRMutation = useMutation({
+    mutationFn: async ({ qrCodeUrl }: { qrCodeUrl: string }) => {
+      const res = await apiRequest("PATCH", `/api/tournaments/${selectedGame}/${activeMode}/qr`, {
+        qrCodeUrl,
+      });
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/tournaments"] });
+      toast({
+        title: "QR Code Updated",
+        description: "Payment QR code has been updated successfully.",
+      });
+      setQrDialogOpen(false);
+      setQrImagePreview(null);
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to update QR code.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleLogout = () => {
     logoutMutation.mutate();
   };
@@ -148,6 +176,39 @@ export default function AdminDashboard() {
 
   const handleReset = () => {
     resetTournamentMutation.mutate();
+  };
+
+  const handleQRImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      toast({
+        title: "Invalid File",
+        description: "Please upload an image file.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const base64String = reader.result as string;
+      setQrImagePreview(base64String);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSaveQRCode = () => {
+    if (!qrImagePreview) {
+      toast({
+        title: "No Image",
+        description: "Please upload a QR code image.",
+        variant: "destructive",
+      });
+      return;
+    }
+    updateQRMutation.mutate({ qrCodeUrl: qrImagePreview });
   };
 
   const getStatusBadge = (status: string) => {
@@ -356,6 +417,11 @@ export default function AdminDashboard() {
                 </SelectContent>
               </Select>
 
+              <Button variant="outline" className="gap-2" onClick={() => setQrDialogOpen(true)} data-testid="button-manage-qr">
+                <QrCode className="w-4 h-4" />
+                Manage QR
+              </Button>
+
               <Button variant="outline" className="gap-2" onClick={handleExportToExcel} data-testid="button-export-excel">
                 <Download className="w-4 h-4" />
                 Export Excel
@@ -490,7 +556,7 @@ export default function AdminDashboard() {
         </Tabs>
       </div>
 
-      {/* Image Dialog */}
+      {/* Payment Screenshot Dialog */}
       <Dialog open={!!selectedImage} onOpenChange={() => setSelectedImage(null)}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
@@ -499,6 +565,78 @@ export default function AdminDashboard() {
           {selectedImage && (
             <img src={selectedImage} alt="Payment Screenshot" className="w-full rounded-lg" />
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* QR Code Management Dialog */}
+      <Dialog open={qrDialogOpen} onOpenChange={setQrDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Manage Payment QR Code</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <p className="text-sm text-muted-foreground mb-2">
+                Upload QR code for <span className="font-semibold">{selectedGame.toUpperCase()}</span> -{" "}
+                <span className="font-semibold">{activeMode.charAt(0).toUpperCase() + activeMode.slice(1)}</span> mode
+              </p>
+            </div>
+
+            {/* File Upload */}
+            <div className="border-2 border-dashed border-muted rounded-lg p-6 text-center">
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleQRImageUpload}
+                className="hidden"
+                id="qr-upload"
+                data-testid="input-qr-upload"
+              />
+              <label
+                htmlFor="qr-upload"
+                className="cursor-pointer flex flex-col items-center gap-2"
+              >
+                <Upload className="w-8 h-8 text-muted-foreground" />
+                <p className="text-sm font-medium">Click to upload QR code</p>
+                <p className="text-xs text-muted-foreground">PNG, JPG up to 5MB</p>
+              </label>
+            </div>
+
+            {/* Preview */}
+            {qrImagePreview && (
+              <div className="space-y-2">
+                <p className="text-sm font-medium">Preview:</p>
+                <img
+                  src={qrImagePreview}
+                  alt="QR Code Preview"
+                  className="w-full max-w-xs mx-auto rounded-lg border"
+                />
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => {
+                  setQrDialogOpen(false);
+                  setQrImagePreview(null);
+                }}
+                data-testid="button-cancel-qr"
+              >
+                Cancel
+              </Button>
+              <Button
+                className="flex-1"
+                onClick={handleSaveQRCode}
+                disabled={!qrImagePreview || updateQRMutation.isPending}
+                data-testid="button-save-qr"
+              >
+                {updateQRMutation.isPending ? "Saving..." : "Save QR Code"}
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
