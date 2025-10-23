@@ -66,6 +66,7 @@ export default function AdminDashboard() {
   const [activityTarget, setActivityTarget] = useState<{type: string, id: string}>({type: "", id: ""});
   const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false);
   const [showAdvancedStats, setShowAdvancedStats] = useState(false);
+  const [lastRefreshTime, setLastRefreshTime] = useState<Date>(new Date());
   
   const { toast } = useToast();
 
@@ -102,7 +103,6 @@ export default function AdminDashboard() {
     },
     refetchOnWindowFocus: true, // Enable refetch on focus for better data consistency
     refetchOnReconnect: true,   // Enable refetch on reconnect
-    refetchInterval: 30000,     // Refetch every 30 seconds
     staleTime: 10000,           // Consider data stale after 10 seconds
     cacheTime: 300000,          // Cache data for 5 minutes
     enabled: !!authStatus?.authenticated,
@@ -131,7 +131,6 @@ export default function AdminDashboard() {
     },
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,
-    refetchInterval: 30000, // Refetch every 30 seconds
     staleTime: 5000,        // Consider data stale after 5 seconds
     cacheTime: 300000,      // Cache data for 5 minutes
     enabled: !!authStatus?.authenticated,
@@ -1053,26 +1052,34 @@ export default function AdminDashboard() {
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Button
-              variant="outline"
-              className="gap-2"
-              onClick={async () => {
-                // Refetch all relevant queries
-                await queryClient.invalidateQueries({ queryKey: [`/api/registrations/${selectedGame}/${activeMode}`] });
-                await queryClient.invalidateQueries({ queryKey: [`/api/tournaments/${selectedGame}/${activeMode}`] });
-                await queryClient.invalidateQueries({ queryKey: ["/api/activity-logs"] });
-                
-                // Show success message
-                toast({
-                  title: "Data Refreshed",
-                  description: "All data has been successfully updated.",
-                });
-              }}
-              data-testid="button-refresh-data"
-            >
-              <RefreshCw className="w-4 h-4" />
-              Refresh Data
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                className="gap-2"
+                onClick={async () => {
+                  // Refetch all relevant queries
+                  await queryClient.invalidateQueries({ queryKey: [`/api/registrations/${selectedGame}/${activeMode}`] });
+                  await queryClient.invalidateQueries({ queryKey: [`/api/tournaments/${selectedGame}/${activeMode}`] });
+                  await queryClient.invalidateQueries({ queryKey: ["/api/activity-logs"] });
+                  
+                  // Update last refresh time
+                  setLastRefreshTime(new Date());
+                  
+                  // Show success message
+                  toast({
+                    title: "Data Refreshed",
+                    description: "All data has been successfully updated.",
+                  });
+                }}
+                data-testid="button-refresh-data"
+              >
+                <RefreshCw className="w-4 h-4" />
+                Refresh Data
+              </Button>
+              <span className="text-xs text-muted-foreground whitespace-nowrap" data-testid="text-last-updated">
+                Last updated: {formatDistanceToNow(lastRefreshTime, { addSuffix: true })}
+              </span>
+            </div>
             <Button
               variant="outline"
               className="gap-2"

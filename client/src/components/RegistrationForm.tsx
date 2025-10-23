@@ -35,9 +35,9 @@ export function RegistrationForm({ gameType, tournamentType, qrCodeUrl, onSubmit
   const [fileSize, setFileSize] = useState<number>(0);
   const [fileError, setFileError] = useState<string>("");
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [isProcessingImage, setIsProcessingImage] = useState(false);
   const config = TOURNAMENT_CONFIG[gameType][tournamentType];
   const formKey = `registration-form-${gameType}-${tournamentType}`;
-  const globalFormKey = `registration-form-global`;
 
   const gameColor = gameType === "bgmi" ? "text-bgmi" : "text-freefire";
   const gameBg = gameType === "bgmi" ? "bg-bgmi" : "bg-freefire";
@@ -82,40 +82,15 @@ export function RegistrationForm({ gameType, tournamentType, qrCodeUrl, onSubmit
   });
 
   useEffect(() => {
-    // Load global form data first
-    const globalSavedData = localStorage.getItem(globalFormKey);
-    if (globalSavedData) {
-      try {
-        const parsedData = JSON.parse(globalSavedData);
-        // Only load data for the current game and tournament type
-        if (parsedData.gameType === gameType && parsedData.tournamentType === tournamentType) {
-          Object.keys(parsedData).forEach((key) => {
-            if (key !== 'gameType' && key !== 'tournamentType') {
-              form.setValue(key as keyof FormData, parsedData[key]);
-            }
-          });
-          if (parsedData.paymentScreenshot) {
-            setScreenshotPreview(parsedData.paymentScreenshot);
-          }
-          if (parsedData.fileName) {
-            setFileName(parsedData.fileName);
-          }
-          if (parsedData.fileSize) {
-            setFileSize(parsedData.fileSize);
-          }
-        }
-      } catch (error) {
-        console.error("Error loading global form data:", error);
-      }
-    }
-    
     // Load specific form data
     const savedData = localStorage.getItem(formKey);
     if (savedData) {
       try {
         const parsedData = JSON.parse(savedData);
         Object.keys(parsedData).forEach((key) => {
-          form.setValue(key as keyof FormData, parsedData[key]);
+          if (key !== 'gameType' && key !== 'tournamentType' && key !== 'fileName' && key !== 'fileSize') {
+            form.setValue(key as keyof FormData, parsedData[key]);
+          }
         });
         if (parsedData.paymentScreenshot) {
           setScreenshotPreview(parsedData.paymentScreenshot);
@@ -130,7 +105,7 @@ export function RegistrationForm({ gameType, tournamentType, qrCodeUrl, onSubmit
         console.error("Error loading saved form data:", error);
       }
     }
-  }, [formKey, globalFormKey, gameType, tournamentType, form]);
+  }, [formKey, gameType, tournamentType, form]);
 
   useEffect(() => {
     const subscription = form.watch((value) => {
@@ -141,14 +116,12 @@ export function RegistrationForm({ gameType, tournamentType, qrCodeUrl, onSubmit
         gameType,
         tournamentType,
       };
-      // Save to specific form key
+      // Save to specific form key only
       localStorage.setItem(formKey, JSON.stringify(dataToSave));
-      // Save to global form key for cross-page persistence
-      localStorage.setItem(globalFormKey, JSON.stringify(dataToSave));
       setHasUnsavedChanges(true);
     });
     return () => subscription.unsubscribe();
-  }, [form, formKey, globalFormKey, fileName, fileSize, gameType, tournamentType]);
+  }, [form, formKey, fileName, fileSize, gameType, tournamentType]);
 
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -210,6 +183,7 @@ export function RegistrationForm({ gameType, tournamentType, qrCodeUrl, onSubmit
 
   const processFile = async (file: File) => {
     setFileError("");
+    setIsProcessingImage(true);
     
     if (file.size > MAX_FILE_SIZE) {
       setFileError(`File size exceeds 5MB. Please upload a smaller image.`);
@@ -217,6 +191,7 @@ export function RegistrationForm({ gameType, tournamentType, qrCodeUrl, onSubmit
       setFileSize(0);
       setScreenshotPreview("");
       form.setValue("paymentScreenshot", "");
+      setIsProcessingImage(false);
       return;
     }
 
@@ -224,17 +199,40 @@ export function RegistrationForm({ gameType, tournamentType, qrCodeUrl, onSubmit
     setFileSize(file.size);
 
     try {
-      const base64 = file.size > 1024 * 1024 ? await compressImage(file) : await new Promise<string>((resolve) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result as string);
-        reader.readAsDataURL(file);
+      // Add timeout for compression (30 seconds)
+      const compressionTimeout = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error("Image compression timeout")), 30000);
       });
+
+      const processImage = async () => {
+        if (file.size > 1024 * 1024) {
+          return await compressImage(file);
+        } else {
+          return await new Promise<string>((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.readAsDataURL(file);
+          });
+        }
+      };
+
+      const base64 = await Promise.race([processImage(), compressionTimeout]);
 
       setScreenshotPreview(base64);
       form.setValue("paymentScreenshot", base64);
     } catch (error) {
-      setFileError("Failed to process image. Please try another file.");
+      setFileError(
+        error instanceof Error && error.message === "Image compression timeout"
+          ? "Image processing took too long. Please try a smaller file."
+          : "Failed to process image. Please try another file."
+      );
+      setFileName("");
+      setFileSize(0);
+      setScreenshotPreview("");
+      form.setValue("paymentScreenshot", "");
       console.error("Error processing image:", error);
+    } finally {
+      setIsProcessingImage(false);
     }
   };
 
@@ -270,7 +268,6 @@ export function RegistrationForm({ gameType, tournamentType, qrCodeUrl, onSubmit
       'registration-form-freefire-solo',
       'registration-form-freefire-duo',
       'registration-form-freefire-squad',
-      'registration-form-global',
     ];
     
     formKeys.forEach(key => localStorage.removeItem(key));
@@ -902,8 +899,36 @@ export function RegistrationForm({ gameType, tournamentType, qrCodeUrl, onSubmit
                                     </Alert>
                                   </motion.div>
                                 )}
+
+                                {isProcessingImage && (
+                                  <motion.div
+                                    initial={{ opacity: 0, y: -10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    className={`p-6 rounded-lg ${gameBgLight} border-2 ${gameBorderLight}`}
+                                    data-testid="alert-processing-image"
+                                  >
+                                    <div className="flex flex-col items-center justify-center space-y-4">
+                                      <motion.div
+                                        animate={{ rotate: 360 }}
+                                        transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
+                                      >
+                                        <Loader2 className={`w-10 h-10 ${gameColor}`} />
+                                      </motion.div>
+                                      <div className="text-center space-y-2">
+                                        <p className={`text-base font-semibold ${gameColor}`}>
+                                          {fileSize > 2 * 1024 * 1024 ? "Compressing image..." : "Processing image..."}
+                                        </p>
+                                        <p className="text-sm text-muted-foreground">
+                                          {fileSize > 2 * 1024 * 1024 
+                                            ? "This may take a few seconds for large files" 
+                                            : "Please wait while we process your screenshot"}
+                                        </p>
+                                      </div>
+                                    </div>
+                                  </motion.div>
+                                )}
                                 
-                                {!screenshotPreview ? (
+                                {!screenshotPreview && !isProcessingImage ? (
                                   <motion.div
                                     whileHover={{ scale: 1.01 }}
                                     whileTap={{ scale: 0.99 }}
@@ -933,7 +958,7 @@ export function RegistrationForm({ gameType, tournamentType, qrCodeUrl, onSubmit
                                       </div>
                                     </div>
                                   </motion.div>
-                                ) : (
+                                ) : screenshotPreview && !isProcessingImage ? (
                                   <motion.div
                                     initial={{ opacity: 0, scale: 0.9 }}
                                     animate={{ opacity: 1, scale: 1 }}
@@ -952,12 +977,13 @@ export function RegistrationForm({ gameType, tournamentType, qrCodeUrl, onSubmit
                                       </div>
                                       <div className="flex gap-2 ml-3">
                                         <div {...getRootProps()}>
-                                          <input {...getInputProps()} />
+                                          <input {...getInputProps()} disabled={isProcessingImage} />
                                           <Button
                                             type="button"
                                             variant="outline"
                                             size="sm"
                                             className="h-9"
+                                            disabled={isProcessingImage}
                                             data-testid="button-change-image"
                                           >
                                             Change
@@ -969,6 +995,7 @@ export function RegistrationForm({ gameType, tournamentType, qrCodeUrl, onSubmit
                                           size="sm"
                                           className="h-9"
                                           onClick={removeFile}
+                                          disabled={isProcessingImage}
                                           data-testid="button-remove-image"
                                         >
                                           <X className="w-4 h-4" />
@@ -976,7 +1003,7 @@ export function RegistrationForm({ gameType, tournamentType, qrCodeUrl, onSubmit
                                       </div>
                                     </div>
                                   </motion.div>
-                                )}
+                                ) : null}
                               </div>
                             </FormControl>
                             <FormMessage />
@@ -1037,7 +1064,7 @@ export function RegistrationForm({ gameType, tournamentType, qrCodeUrl, onSubmit
                         type="submit"
                         className={`w-full h-12 text-base font-semibold ${gameBg} hover:opacity-90`}
                         size="lg"
-                        disabled={isSubmitting || !canProceedToStep3()}
+                        disabled={isSubmitting || isProcessingImage || !canProceedToStep3()}
                         data-testid="button-submit-registration"
                       >
                         <AnimatePresence mode="wait">
@@ -1051,6 +1078,17 @@ export function RegistrationForm({ gameType, tournamentType, qrCodeUrl, onSubmit
                             >
                               <Loader2 className="w-5 h-5 mr-2 animate-spin" />
                               Submitting...
+                            </motion.div>
+                          ) : isProcessingImage ? (
+                            <motion.div
+                              key="processing"
+                              initial={{ opacity: 0 }}
+                              animate={{ opacity: 1 }}
+                              exit={{ opacity: 0 }}
+                              className="flex items-center"
+                            >
+                              <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                              Processing image...
                             </motion.div>
                           ) : (
                             <motion.span
@@ -1066,7 +1104,17 @@ export function RegistrationForm({ gameType, tournamentType, qrCodeUrl, onSubmit
                       </Button>
                     </motion.div>
                   </div>
-                  {!canProceedToStep3() && (
+                  {isProcessingImage && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className={`text-sm ${gameColor} text-center p-3 rounded-md ${gameBgLight} border ${gameBorderLight}`}
+                    >
+                      <Loader2 className="w-4 h-4 inline mr-2 animate-spin" />
+                      Processing your screenshot - please wait...
+                    </motion.div>
+                  )}
+                  {!isProcessingImage && !canProceedToStep3() && (
                     <motion.div
                       initial={{ opacity: 0, y: -10 }}
                       animate={{ opacity: 1, y: 0 }}
