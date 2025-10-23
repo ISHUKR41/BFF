@@ -835,29 +835,32 @@ export function RegistrationForm({ gameType, tournamentType, qrCodeUrl, onSubmit
                                 
                                 {!screenshotPreview ? (
                                   <motion.div
-                                    {...getRootProps()}
-                                    className={`flex flex-col items-center justify-center w-full min-h-48 border-3 border-dashed rounded-lg cursor-pointer transition-all ${
-                                      isDragActive
-                                        ? `${gameBorder} ${gameBgLight} border-solid`
-                                        : `border-border hover-elevate active-elevate-2 bg-muted/20`
-                                    }`}
                                     whileHover={{ scale: 1.01 }}
                                     whileTap={{ scale: 0.99 }}
                                   >
-                                    <input {...getInputProps()} data-testid="input-payment-screenshot" />
-                                    <div className="flex flex-col items-center justify-center p-8 text-center">
-                                      <motion.div
-                                        animate={isDragActive ? { scale: [1, 1.1, 1], rotate: [0, 5, -5, 0] } : {}}
-                                        transition={{ duration: 0.5, repeat: isDragActive ? Infinity : 0 }}
-                                      >
-                                        <Upload className={`w-12 h-12 mb-4 ${isDragActive ? gameColor : 'text-muted-foreground'}`} />
-                                      </motion.div>
-                                      <p className={`text-base font-semibold mb-2 ${isDragActive ? gameColor : 'text-foreground'}`}>
-                                        {isDragActive ? "Drop your screenshot here" : "Drag & drop your payment screenshot here"}
-                                      </p>
-                                      <p className="text-sm text-muted-foreground mb-1">or click to browse</p>
-                                      <p className="text-xs text-muted-foreground mt-2">Supported formats: PNG, JPG, JPEG, GIF, WEBP</p>
-                                      <p className="text-xs text-muted-foreground">Max size: 5MB</p>
+                                    <div
+                                      {...getRootProps()}
+                                      className={`flex flex-col items-center justify-center w-full min-h-48 border-3 border-dashed rounded-lg cursor-pointer transition-all ${
+                                        isDragActive
+                                          ? `${gameBorder} ${gameBgLight} border-solid`
+                                          : `border-border hover-elevate active-elevate-2 bg-muted/20`
+                                      }`}
+                                    >
+                                      <input {...getInputProps()} data-testid="input-payment-screenshot" />
+                                      <div className="flex flex-col items-center justify-center p-8 text-center">
+                                        <motion.div
+                                          animate={isDragActive ? { scale: [1, 1.1, 1], rotate: [0, 5, -5, 0] } : {}}
+                                          transition={{ duration: 0.5, repeat: isDragActive ? Infinity : 0 }}
+                                        >
+                                          <Upload className={`w-12 h-12 mb-4 ${isDragActive ? gameColor : 'text-muted-foreground'}`} />
+                                        </motion.div>
+                                        <p className={`text-base font-semibold mb-2 ${isDragActive ? gameColor : 'text-foreground'}`}>
+                                          {isDragActive ? "Drop your screenshot here" : "Drag & drop your payment screenshot here"}
+                                        </p>
+                                        <p className="text-sm text-muted-foreground mb-1">or click to browse</p>
+                                        <p className="text-xs text-muted-foreground mt-2">Supported formats: PNG, JPG, JPEG, GIF, WEBP</p>
+                                        <p className="text-xs text-muted-foreground">Max size: 5MB</p>
+                                      </div>
                                     </div>
                                   </motion.div>
                                 ) : (
