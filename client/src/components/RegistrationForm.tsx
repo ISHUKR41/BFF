@@ -22,12 +22,13 @@ interface RegistrationFormProps {
   tournamentType: TournamentType;
   qrCodeUrl?: string;
   onSubmit: (data: any) => Promise<void>;
+  onSuccess?: () => void;
   isSubmitting: boolean;
 }
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 
-export function RegistrationForm({ gameType, tournamentType, qrCodeUrl, onSubmit, isSubmitting }: RegistrationFormProps) {
+export function RegistrationForm({ gameType, tournamentType, qrCodeUrl, onSubmit, onSuccess, isSubmitting }: RegistrationFormProps) {
   const [currentStep, setCurrentStep] = useState(1);
   const [screenshotPreview, setScreenshotPreview] = useState<string>("");
   const [fileName, setFileName] = useState<string>("");
@@ -225,15 +226,34 @@ export function RegistrationForm({ gameType, tournamentType, qrCodeUrl, onSubmit
   };
 
   const handleSubmit = async (data: FormData) => {
-    setCurrentStep(3);
-    await onSubmit({
-      ...data,
-      gameType,
-      tournamentType,
-      status: "pending",
-    });
-    setHasUnsavedChanges(false);
-    localStorage.removeItem(formKey);
+    try {
+      setCurrentStep(3);
+      await onSubmit({
+        ...data,
+        gameType,
+        tournamentType,
+        status: "pending",
+      });
+      
+      // Reset form state after successful submission
+      form.reset();
+      setScreenshotPreview("");
+      setFileName("");
+      setFileSize(0);
+      setFileError("");
+      setCurrentStep(1);
+      setHasUnsavedChanges(false);
+      localStorage.removeItem(formKey);
+      
+      // Call onSuccess callback if provided
+      if (onSuccess) {
+        onSuccess();
+      }
+    } catch (error) {
+      // On error, go back to step 2 so user can retry
+      setCurrentStep(2);
+      console.error("Submission error:", error);
+    }
   };
 
   const formatFileSize = (bytes: number): string => {

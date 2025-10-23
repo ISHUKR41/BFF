@@ -153,7 +153,7 @@ export default function TournamentPage({ gameType }: TournamentPageProps) {
   const bannerImage = gameType === "bgmi" ? bgmiBanner : freeFireBanner;
 
   const handleSubmit = async (data: any) => {
-    createRegistrationMutation.mutate(data);
+    await createRegistrationMutation.mutateAsync(data);
   };
 
   if (isLoading) {

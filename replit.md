@@ -18,6 +18,22 @@ This is a professional tournament management platform for BGMI (Battlegrounds Mo
 
 ## Recent Enhancements (Latest Update)
 
+### Critical Database Migration (October 2025)
+- **Migrated from in-memory storage to PostgreSQL database**
+  - Replaced `MemStorage` class with `DbStorage` using Drizzle ORM
+  - All data now persists across server restarts and deployments
+  - Fixes data loss issues when deploying to Vercel
+  - Database initialization happens before server starts to ensure data integrity
+  - Added capacity enforcement in createRegistration to prevent slot overflow
+  
+- **Fixed form state management**
+  - Forms now properly reset after successful submission
+  - LocalStorage is cleared on submission success
+  - Better error handling - form returns to step 2 on submission failure
+  - Fixed race condition where multiple users could register simultaneously
+
+## Previous Enhancements
+
 ### Admin Dashboard Improvements
 - **Comprehensive Statistics Overview**: Total registrations across all games, total revenue from approved entries, pending approvals with animated indicators, approval rate percentage
 - **QR Code Management**: Enhanced dialog with current QR preview, drag-and-drop upload zone, file validation and preview

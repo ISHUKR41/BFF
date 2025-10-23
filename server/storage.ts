@@ -10,9 +10,19 @@ import {
   type GameType,
   type TournamentType,
   TOURNAMENT_CONFIG,
+  admins,
+  tournaments,
+  registrations,
+  activityLogs,
 } from "@shared/schema";
-import { randomUUID } from "crypto";
+import { neon } from "@neondatabase/serverless";
+import { drizzle } from "drizzle-orm/neon-http";
+import { eq, and, or, like, desc, sql } from "drizzle-orm";
 import bcrypt from "bcryptjs";
+
+const connectionString = process.env.DATABASE_URL!;
+const sqlClient = neon(connectionString);
+const db = drizzle(sqlClient);
 
 export interface IStorage {
   // Admin operations
@@ -49,169 +59,199 @@ export interface IStorage {
   getActivityLogsByTarget(targetType: string, targetId: string): Promise<ActivityLog[]>;
 }
 
-export class MemStorage implements IStorage {
-  private admins: Map<string, Admin>;
-  private tournaments: Map<string, Tournament>;
-  private registrations: Map<string, Registration>;
-  private activityLogs: Map<string, ActivityLog>;
+export class DbStorage implements IStorage {
+  private ready: Promise<void>;
 
   constructor() {
-    this.admins = new Map();
-    this.tournaments = new Map();
-    this.registrations = new Map();
-    this.activityLogs = new Map();
-    
-    // Initialize default admin
-    this.initializeDefaultAdmin();
+    this.ready = this.initialize();
+  }
+
+  private async initialize(): Promise<void> {
+    // Initialize default admin if not exists
+    await this.initializeDefaultAdmin();
     
     // Initialize all tournaments
-    this.initializeTournaments();
+    await this.initializeTournaments();
+  }
+
+  async waitReady(): Promise<void> {
+    await this.ready;
   }
 
   private async initializeDefaultAdmin() {
-    const hashedPassword = await bcrypt.hash("admin123", 10);
-    const admin: Admin = {
-      id: randomUUID(),
-      username: "admin",
-      password: hashedPassword,
-    };
-    this.admins.set(admin.id, admin);
+    try {
+      const existingAdmin = await db.select().from(admins).where(eq(admins.username, "admin")).limit(1);
+      
+      if (existingAdmin.length === 0) {
+        const hashedPassword = await bcrypt.hash("admin123", 10);
+        await db.insert(admins).values({
+          username: "admin",
+          password: hashedPassword,
+        });
+      }
+    } catch (error) {
+      console.error("Error initializing default admin:", error);
+    }
   }
 
-  private initializeTournaments() {
-    // Default QR code URL (using uploaded payment QR image)
-    const defaultQR = "/attached_assets/payment-qr-new.jpg";
-    
-    // Initialize BGMI tournaments
-    ["solo", "duo", "squad"].forEach((type) => {
-      const tournamentType = type as TournamentType;
-      const config = TOURNAMENT_CONFIG.bgmi[tournamentType];
-      const key = `bgmi-${type}`;
-      const tournament: Tournament = {
-        id: randomUUID(),
-        gameType: "bgmi",
-        tournamentType,
-        registeredCount: 0,
-        maxSlots: config.maxSlots,
-        qrCodeUrl: defaultQR,
-        isActive: 1,
-      };
-      this.tournaments.set(key, tournament);
-    });
+  private async initializeTournaments() {
+    try {
+      // Default QR code URL
+      const defaultQR = "/attached_assets/payment-qr-new.jpg";
+      
+      // Initialize BGMI tournaments
+      for (const type of ["solo", "duo", "squad"] as const) {
+        const config = TOURNAMENT_CONFIG.bgmi[type];
+        const existing = await db.select().from(tournaments)
+          .where(and(eq(tournaments.gameType, "bgmi"), eq(tournaments.tournamentType, type)))
+          .limit(1);
+        
+        if (existing.length === 0) {
+          await db.insert(tournaments).values({
+            gameType: "bgmi",
+            tournamentType: type,
+            registeredCount: 0,
+            maxSlots: config.maxSlots,
+            qrCodeUrl: defaultQR,
+            isActive: 1,
+          });
+        }
+      }
 
-    // Initialize Free Fire tournaments
-    ["solo", "duo", "squad"].forEach((type) => {
-      const tournamentType = type as TournamentType;
-      const config = TOURNAMENT_CONFIG.freefire[tournamentType];
-      const key = `freefire-${type}`;
-      const tournament: Tournament = {
-        id: randomUUID(),
-        gameType: "freefire",
-        tournamentType,
-        registeredCount: 0,
-        maxSlots: config.maxSlots,
-        qrCodeUrl: defaultQR,
-        isActive: 1,
-      };
-      this.tournaments.set(key, tournament);
-    });
-  }
-
-  private getTournamentKey(gameType: GameType, tournamentType: TournamentType): string {
-    return `${gameType}-${tournamentType}`;
+      // Initialize Free Fire tournaments
+      for (const type of ["solo", "duo", "squad"] as const) {
+        const config = TOURNAMENT_CONFIG.freefire[type];
+        const existing = await db.select().from(tournaments)
+          .where(and(eq(tournaments.gameType, "freefire"), eq(tournaments.tournamentType, type)))
+          .limit(1);
+        
+        if (existing.length === 0) {
+          await db.insert(tournaments).values({
+            gameType: "freefire",
+            tournamentType: type,
+            registeredCount: 0,
+            maxSlots: config.maxSlots,
+            qrCodeUrl: defaultQR,
+            isActive: 1,
+          });
+        }
+      }
+    } catch (error) {
+      console.error("Error initializing tournaments:", error);
+    }
   }
 
   // Admin operations
   async getAdmin(id: string): Promise<Admin | undefined> {
-    return this.admins.get(id);
+    const result = await db.select().from(admins).where(eq(admins.id, id)).limit(1);
+    return result[0];
   }
 
   async getAdminByUsername(username: string): Promise<Admin | undefined> {
-    return Array.from(this.admins.values()).find(
-      (admin) => admin.username === username
-    );
+    const result = await db.select().from(admins).where(eq(admins.username, username)).limit(1);
+    return result[0];
   }
 
   async createAdmin(insertAdmin: InsertAdmin): Promise<Admin> {
-    const id = randomUUID();
     const hashedPassword = await bcrypt.hash(insertAdmin.password, 10);
-    const admin: Admin = {
-      ...insertAdmin,
-      id,
+    const result = await db.insert(admins).values({
+      username: insertAdmin.username,
       password: hashedPassword,
-    };
-    this.admins.set(id, admin);
-    return admin;
+    }).returning();
+    return result[0];
   }
 
   // Tournament operations
   async getTournament(gameType: GameType, tournamentType: TournamentType): Promise<Tournament | undefined> {
-    const key = this.getTournamentKey(gameType, tournamentType);
-    return this.tournaments.get(key);
+    const result = await db.select().from(tournaments)
+      .where(and(eq(tournaments.gameType, gameType), eq(tournaments.tournamentType, tournamentType)))
+      .limit(1);
+    return result[0];
   }
 
   async getAllTournaments(): Promise<Tournament[]> {
-    return Array.from(this.tournaments.values());
+    return await db.select().from(tournaments);
   }
 
   async incrementTournamentCount(gameType: GameType, tournamentType: TournamentType): Promise<Tournament> {
-    const key = this.getTournamentKey(gameType, tournamentType);
-    const tournament = this.tournaments.get(key);
-    if (!tournament) {
+    const result = await db.update(tournaments)
+      .set({ registeredCount: sql`${tournaments.registeredCount} + 1` })
+      .where(and(eq(tournaments.gameType, gameType), eq(tournaments.tournamentType, tournamentType)))
+      .returning();
+    
+    if (!result[0]) {
       throw new Error("Tournament not found");
     }
-    tournament.registeredCount++;
-    this.tournaments.set(key, tournament);
-    return tournament;
+    return result[0];
   }
 
   async decrementTournamentCount(gameType: GameType, tournamentType: TournamentType): Promise<Tournament> {
-    const key = this.getTournamentKey(gameType, tournamentType);
-    const tournament = this.tournaments.get(key);
+    const tournament = await this.getTournament(gameType, tournamentType);
     if (!tournament) {
       throw new Error("Tournament not found");
     }
-    if (tournament.registeredCount > 0) {
-      tournament.registeredCount--;
-    }
-    this.tournaments.set(key, tournament);
-    return tournament;
+    
+    const newCount = Math.max(0, tournament.registeredCount - 1);
+    const result = await db.update(tournaments)
+      .set({ registeredCount: newCount })
+      .where(and(eq(tournaments.gameType, gameType), eq(tournaments.tournamentType, tournamentType)))
+      .returning();
+    
+    return result[0];
   }
 
   async resetTournament(gameType: GameType, tournamentType: TournamentType): Promise<Tournament> {
-    const key = this.getTournamentKey(gameType, tournamentType);
-    const tournament = this.tournaments.get(key);
-    if (!tournament) {
-      throw new Error("Tournament not found");
-    }
-    tournament.registeredCount = 0;
-    this.tournaments.set(key, tournament);
-    
-    // Also delete all registrations for this tournament
+    // Delete all registrations for this tournament
     await this.deleteRegistrationsByTournament(gameType, tournamentType);
     
-    return tournament;
+    // Reset count to 0
+    const result = await db.update(tournaments)
+      .set({ registeredCount: 0 })
+      .where(and(eq(tournaments.gameType, gameType), eq(tournaments.tournamentType, tournamentType)))
+      .returning();
+    
+    if (!result[0]) {
+      throw new Error("Tournament not found");
+    }
+    return result[0];
   }
 
   async updateQRCode(gameType: GameType, tournamentType: TournamentType, qrCodeUrl: string): Promise<Tournament> {
-    const key = this.getTournamentKey(gameType, tournamentType);
-    const tournament = this.tournaments.get(key);
-    if (!tournament) {
+    const result = await db.update(tournaments)
+      .set({ qrCodeUrl })
+      .where(and(eq(tournaments.gameType, gameType), eq(tournaments.tournamentType, tournamentType)))
+      .returning();
+    
+    if (!result[0]) {
       throw new Error("Tournament not found");
     }
-    tournament.qrCodeUrl = qrCodeUrl;
-    this.tournaments.set(key, tournament);
-    return tournament;
+    return result[0];
   }
 
   // Registration operations
   async createRegistration(insertRegistration: InsertRegistration): Promise<Registration> {
-    const id = randomUUID();
-    const registration: Registration = {
-      ...insertRegistration,
-      id,
-      submittedAt: new Date(),
+    // Get tournament and check slots atomically
+    const tournament = await this.getTournament(
+      insertRegistration.gameType as GameType,
+      insertRegistration.tournamentType as TournamentType
+    );
+    
+    if (!tournament) {
+      throw new Error("Tournament not found");
+    }
+    
+    if (tournament.registeredCount >= tournament.maxSlots) {
+      throw new Error("Tournament is full");
+    }
+    
+    // Create registration
+    const result = await db.insert(registrations).values({
+      gameType: insertRegistration.gameType,
+      tournamentType: insertRegistration.tournamentType,
       teamName: insertRegistration.teamName || null,
+      playerName: insertRegistration.playerName,
+      gameId: insertRegistration.gameId,
+      whatsapp: insertRegistration.whatsapp,
       player2Name: insertRegistration.player2Name || null,
       player2GameId: insertRegistration.player2GameId || null,
       player3Name: insertRegistration.player3Name || null,
@@ -219,171 +259,176 @@ export class MemStorage implements IStorage {
       player4Name: insertRegistration.player4Name || null,
       player4GameId: insertRegistration.player4GameId || null,
       paymentScreenshot: insertRegistration.paymentScreenshot || null,
+      transactionId: insertRegistration.transactionId,
+      status: "pending",
       paymentVerified: 0,
-      adminNotes: null,
       isFlagged: 0,
-      lastModifiedAt: null,
-      lastModifiedBy: null,
-    };
-    this.registrations.set(id, registration);
+    }).returning();
     
-    // Increment tournament count
+    // Increment tournament count after successful insertion
     await this.incrementTournamentCount(
       insertRegistration.gameType as GameType,
       insertRegistration.tournamentType as TournamentType
     );
     
-    return registration;
+    return result[0];
   }
 
   async getRegistration(id: string): Promise<Registration | undefined> {
-    return this.registrations.get(id);
+    const result = await db.select().from(registrations).where(eq(registrations.id, id)).limit(1);
+    return result[0];
   }
 
   async getAllRegistrations(): Promise<Registration[]> {
-    return Array.from(this.registrations.values());
+    return await db.select().from(registrations).orderBy(desc(registrations.submittedAt));
   }
 
   async getRegistrationsByGame(gameType: GameType, tournamentType: TournamentType): Promise<Registration[]> {
-    return Array.from(this.registrations.values()).filter(
-      (reg) => reg.gameType === gameType && reg.tournamentType === tournamentType
-    );
+    return await db.select().from(registrations)
+      .where(and(eq(registrations.gameType, gameType), eq(registrations.tournamentType, tournamentType)))
+      .orderBy(desc(registrations.submittedAt));
   }
 
   async getRegistrationsByStatus(status: string): Promise<Registration[]> {
-    return Array.from(this.registrations.values()).filter(
-      (reg) => reg.status === status
-    );
+    return await db.select().from(registrations)
+      .where(eq(registrations.status, status))
+      .orderBy(desc(registrations.submittedAt));
   }
 
   async updateRegistrationStatus(id: string, status: "pending" | "approved" | "rejected", adminUsername?: string): Promise<Registration | undefined> {
-    const registration = this.registrations.get(id);
-    if (!registration) {
-      return undefined;
-    }
-    registration.status = status;
-    registration.lastModifiedAt = new Date();
-    registration.lastModifiedBy = adminUsername || null;
-    this.registrations.set(id, registration);
+    const result = await db.update(registrations)
+      .set({ 
+        status, 
+        lastModifiedAt: new Date(),
+        lastModifiedBy: adminUsername || null,
+      })
+      .where(eq(registrations.id, id))
+      .returning();
     
     // Log activity
-    if (adminUsername) {
+    if (adminUsername && result[0]) {
       await this.createActivityLog({
         adminUsername,
         action: status,
         targetType: "registration",
         targetId: id,
-        details: JSON.stringify({ playerName: registration.playerName, teamName: registration.teamName }),
+        details: JSON.stringify({ playerName: result[0].playerName, teamName: result[0].teamName }),
       });
     }
     
-    return registration;
+    return result[0];
   }
 
   async updateRegistrationDetails(id: string, updates: Partial<Registration>, adminUsername?: string): Promise<Registration | undefined> {
-    const registration = this.registrations.get(id);
-    if (!registration) {
-      return undefined;
-    }
-    
-    Object.assign(registration, updates, {
-      lastModifiedAt: new Date(),
-      lastModifiedBy: adminUsername || null,
-    });
-    
-    this.registrations.set(id, registration);
+    const result = await db.update(registrations)
+      .set({ 
+        ...updates,
+        lastModifiedAt: new Date(),
+        lastModifiedBy: adminUsername || null,
+      })
+      .where(eq(registrations.id, id))
+      .returning();
     
     // Log activity
-    if (adminUsername) {
+    if (adminUsername && result[0]) {
       await this.createActivityLog({
         adminUsername,
         action: "edit",
         targetType: "registration",
         targetId: id,
-        details: JSON.stringify({ updates, playerName: registration.playerName }),
+        details: JSON.stringify({ updates, playerName: result[0].playerName }),
       });
     }
     
-    return registration;
+    return result[0];
   }
 
   async updateRegistrationNotes(id: string, notes: string, adminUsername?: string): Promise<Registration | undefined> {
-    const registration = this.registrations.get(id);
-    if (!registration) {
-      return undefined;
-    }
-    
-    registration.adminNotes = notes;
-    registration.lastModifiedAt = new Date();
-    registration.lastModifiedBy = adminUsername || null;
-    this.registrations.set(id, registration);
+    const result = await db.update(registrations)
+      .set({ 
+        adminNotes: notes,
+        lastModifiedAt: new Date(),
+        lastModifiedBy: adminUsername || null,
+      })
+      .where(eq(registrations.id, id))
+      .returning();
     
     // Log activity
-    if (adminUsername) {
+    if (adminUsername && result[0]) {
       await this.createActivityLog({
         adminUsername,
         action: "add_note",
         targetType: "registration",
         targetId: id,
-        details: JSON.stringify({ playerName: registration.playerName }),
+        details: JSON.stringify({ playerName: result[0].playerName }),
       });
     }
     
-    return registration;
+    return result[0];
   }
 
   async toggleRegistrationFlag(id: string, adminUsername?: string): Promise<Registration | undefined> {
-    const registration = this.registrations.get(id);
-    if (!registration) {
+    const current = await this.getRegistration(id);
+    if (!current) {
       return undefined;
     }
     
-    registration.isFlagged = registration.isFlagged === 1 ? 0 : 1;
-    registration.lastModifiedAt = new Date();
-    registration.lastModifiedBy = adminUsername || null;
-    this.registrations.set(id, registration);
+    const newFlagValue = current.isFlagged === 1 ? 0 : 1;
+    const result = await db.update(registrations)
+      .set({ 
+        isFlagged: newFlagValue,
+        lastModifiedAt: new Date(),
+        lastModifiedBy: adminUsername || null,
+      })
+      .where(eq(registrations.id, id))
+      .returning();
     
     // Log activity
-    if (adminUsername) {
+    if (adminUsername && result[0]) {
       await this.createActivityLog({
         adminUsername,
-        action: registration.isFlagged === 1 ? "flag" : "unflag",
+        action: newFlagValue === 1 ? "flag" : "unflag",
         targetType: "registration",
         targetId: id,
-        details: JSON.stringify({ playerName: registration.playerName }),
+        details: JSON.stringify({ playerName: result[0].playerName }),
       });
     }
     
-    return registration;
+    return result[0];
   }
 
   async togglePaymentVerification(id: string, adminUsername?: string): Promise<Registration | undefined> {
-    const registration = this.registrations.get(id);
-    if (!registration) {
+    const current = await this.getRegistration(id);
+    if (!current) {
       return undefined;
     }
     
-    registration.paymentVerified = registration.paymentVerified === 1 ? 0 : 1;
-    registration.lastModifiedAt = new Date();
-    registration.lastModifiedBy = adminUsername || null;
-    this.registrations.set(id, registration);
+    const newVerifiedValue = current.paymentVerified === 1 ? 0 : 1;
+    const result = await db.update(registrations)
+      .set({ 
+        paymentVerified: newVerifiedValue,
+        lastModifiedAt: new Date(),
+        lastModifiedBy: adminUsername || null,
+      })
+      .where(eq(registrations.id, id))
+      .returning();
     
     // Log activity
-    if (adminUsername) {
+    if (adminUsername && result[0]) {
       await this.createActivityLog({
         adminUsername,
-        action: registration.paymentVerified === 1 ? "verify_payment" : "unverify_payment",
+        action: newVerifiedValue === 1 ? "verify_payment" : "unverify_payment",
         targetType: "registration",
         targetId: id,
-        details: JSON.stringify({ playerName: registration.playerName }),
+        details: JSON.stringify({ playerName: result[0].playerName }),
       });
     }
     
-    return registration;
+    return result[0];
   }
 
   async deleteRegistration(id: string): Promise<boolean> {
-    const registration = this.registrations.get(id);
+    const registration = await this.getRegistration(id);
     if (!registration) {
       return false;
     }
@@ -394,65 +439,60 @@ export class MemStorage implements IStorage {
       registration.tournamentType as TournamentType
     );
     
-    this.registrations.delete(id);
+    await db.delete(registrations).where(eq(registrations.id, id));
     return true;
   }
 
   async deleteRegistrationsByTournament(gameType: GameType, tournamentType: TournamentType): Promise<void> {
-    const toDelete: string[] = [];
-    this.registrations.forEach((reg, id) => {
-      if (reg.gameType === gameType && reg.tournamentType === tournamentType) {
-        toDelete.push(id);
-      }
-    });
-    toDelete.forEach((id) => this.registrations.delete(id));
+    await db.delete(registrations)
+      .where(and(eq(registrations.gameType, gameType), eq(registrations.tournamentType, tournamentType)));
   }
 
   async searchRegistrations(query: string): Promise<Registration[]> {
-    const lowerQuery = query.toLowerCase();
-    return Array.from(this.registrations.values()).filter((reg) => {
-      return (
-        reg.playerName.toLowerCase().includes(lowerQuery) ||
-        reg.gameId.toLowerCase().includes(lowerQuery) ||
-        reg.whatsapp.includes(lowerQuery) ||
-        reg.transactionId.toLowerCase().includes(lowerQuery) ||
-        (reg.teamName && reg.teamName.toLowerCase().includes(lowerQuery)) ||
-        (reg.player2Name && reg.player2Name.toLowerCase().includes(lowerQuery)) ||
-        (reg.player3Name && reg.player3Name.toLowerCase().includes(lowerQuery)) ||
-        (reg.player4Name && reg.player4Name.toLowerCase().includes(lowerQuery)) ||
-        (reg.adminNotes && reg.adminNotes.toLowerCase().includes(lowerQuery))
-      );
-    });
+    const lowerQuery = `%${query.toLowerCase()}%`;
+    return await db.select().from(registrations)
+      .where(
+        or(
+          like(sql`LOWER(${registrations.playerName})`, lowerQuery),
+          like(sql`LOWER(${registrations.gameId})`, lowerQuery),
+          like(registrations.whatsapp, lowerQuery),
+          like(sql`LOWER(${registrations.transactionId})`, lowerQuery),
+          like(sql`LOWER(${registrations.teamName})`, lowerQuery),
+          like(sql`LOWER(${registrations.player2Name})`, lowerQuery),
+          like(sql`LOWER(${registrations.player3Name})`, lowerQuery),
+          like(sql`LOWER(${registrations.player4Name})`, lowerQuery),
+          like(sql`LOWER(${registrations.adminNotes})`, lowerQuery)
+        )
+      )
+      .orderBy(desc(registrations.submittedAt));
   }
 
   // Activity log operations
   async createActivityLog(insertLog: InsertActivityLog): Promise<ActivityLog> {
-    const id = randomUUID();
-    const log: ActivityLog = {
-      ...insertLog,
-      id,
-      timestamp: new Date(),
+    const result = await db.insert(activityLogs).values({
+      adminUsername: insertLog.adminUsername,
+      action: insertLog.action,
+      targetType: insertLog.targetType,
+      targetId: insertLog.targetId,
       details: insertLog.details || null,
-    };
-    this.activityLogs.set(id, log);
-    return log;
+    }).returning();
+    return result[0];
   }
 
   async getAllActivityLogs(limit?: number): Promise<ActivityLog[]> {
-    const logs = Array.from(this.activityLogs.values())
-      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    const query = db.select().from(activityLogs).orderBy(desc(activityLogs.timestamp));
     
     if (limit) {
-      return logs.slice(0, limit);
+      return await query.limit(limit);
     }
-    return logs;
+    return await query;
   }
 
   async getActivityLogsByTarget(targetType: string, targetId: string): Promise<ActivityLog[]> {
-    return Array.from(this.activityLogs.values())
-      .filter((log) => log.targetType === targetType && log.targetId === targetId)
-      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    return await db.select().from(activityLogs)
+      .where(and(eq(activityLogs.targetType, targetType), eq(activityLogs.targetId, targetId)))
+      .orderBy(desc(activityLogs.timestamp));
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DbStorage();
