@@ -106,16 +106,29 @@ export default function TournamentPage({ gameType }: TournamentPageProps) {
   const [activeTab, setActiveTab] = useState<TournamentType>("solo");
   const { toast } = useToast();
 
-  // Fetch all tournaments
+  // Fetch tournaments for current game type only
   const { data: tournaments, isLoading } = useQuery<Tournament[]>({
-    queryKey: ["/api/tournaments"],
+    queryKey: [`/api/tournaments/${gameType}`],
+    queryFn: async () => {
+      // Fetch all tournaments and filter by game type on client side
+      // This ensures we always get fresh data for the specific game type
+      const response = await fetch(`/api/tournaments`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch tournaments');
+      }
+      const allTournaments: Tournament[] = await response.json();
+      // Filter by current game type to ensure proper separation
+      return allTournaments.filter(tournament => tournament.gameType === gameType);
+    },
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
+    refetchInterval: 30000, // Refetch every 30 seconds
   });
 
-  // Get current tournament data
+  // Get current tournament data - properly filter by game type
   const getTournamentData = (type: TournamentType) => {
-    return tournaments?.find(
-      (t) => t.gameType === gameType && t.tournamentType === type
-    ) || {
+    const gameTournaments = tournaments?.filter(t => t.gameType === gameType) || [];
+    return gameTournaments.find(t => t.tournamentType === type) || {
       registeredCount: 0,
       maxSlots: TOURNAMENT_CONFIG[gameType][type].maxSlots,
       qrCodeUrl: null,
@@ -153,7 +166,13 @@ export default function TournamentPage({ gameType }: TournamentPageProps) {
   const bannerImage = gameType === "bgmi" ? bgmiBanner : freeFireBanner;
 
   const handleSubmit = async (data: any) => {
-    await createRegistrationMutation.mutateAsync(data);
+    // Ensure gameType and tournamentType are correctly set
+    const registrationData = {
+      ...data,
+      gameType,
+      tournamentType: activeTab,
+    };
+    await createRegistrationMutation.mutateAsync(registrationData);
   };
 
   if (isLoading) {

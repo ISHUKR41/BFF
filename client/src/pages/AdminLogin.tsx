@@ -35,12 +35,17 @@ export default function AdminLogin() {
       const res = await apiRequest("POST", "/api/admin/login", data);
       return await res.json();
     },
-    onSuccess: () => {
+    onSuccess: (response) => {
+      // Store JWT token in localStorage
+      if (response.token) {
+        localStorage.setItem('admin_token', response.token);
+      }
+      
       toast({
         title: "Login Successful",
         description: "Welcome to the admin dashboard.",
       });
-      // Small delay to ensure session is set
+      // Small delay to ensure token is stored
       setTimeout(() => {
         setLocation("/admin");
       }, 100);

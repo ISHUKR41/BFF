@@ -80,9 +80,31 @@ export default function AdminDashboard() {
     }
   }, [authLoading, authStatus, setLocation]);
 
-  const { data: allRegistrations, isLoading } = useQuery<Registration[]>({
-    queryKey: ["/api/registrations"],
-    refetchInterval: 5000,
+  const { data: allRegistrations, isLoading, refetch: refetchRegistrations } = useQuery<Registration[]>({
+    queryKey: [`/api/registrations/${selectedGame}/${activeMode}`],
+    queryFn: async () => {
+      // Fetch registrations with filters to reduce data transfer
+      const params = new URLSearchParams();
+      params.append('gameType', selectedGame);
+      params.append('tournamentType', activeMode);
+      
+      const response = await fetch(`/api/registrations?${params.toString()}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('admin-token')}`
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch registrations');
+      }
+      
+      return await response.json();
+    },
+    refetchOnWindowFocus: true, // Enable refetch on focus for better data consistency
+    refetchOnReconnect: true,   // Enable refetch on reconnect
+    refetchInterval: 30000,     // Refetch every 30 seconds
+    staleTime: 10000,           // Consider data stale after 10 seconds
+    cacheTime: 300000,          // Cache data for 5 minutes
     enabled: !!authStatus?.authenticated,
     retry: (failureCount, error: any) => {
       if (error?.message?.includes("Unauthorized") || error?.message?.includes("401")) {
@@ -93,7 +115,25 @@ export default function AdminDashboard() {
   });
 
   const { data: currentTournament } = useQuery<Tournament>({
-    queryKey: ["/api/tournaments", selectedGame, activeMode],
+    queryKey: [`/api/tournaments/${selectedGame}/${activeMode}`],
+    queryFn: async () => {
+      const response = await fetch(`/api/tournaments/${selectedGame}/${activeMode}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('admin-token')}`
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch tournament data');
+      }
+      
+      return await response.json();
+    },
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
+    refetchInterval: 30000, // Refetch every 30 seconds
+    staleTime: 5000,        // Consider data stale after 5 seconds
+    cacheTime: 300000,      // Cache data for 5 minutes
     enabled: !!authStatus?.authenticated,
   });
 
@@ -1013,6 +1053,26 @@ export default function AdminDashboard() {
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="outline"
+              className="gap-2"
+              onClick={async () => {
+                // Refetch all relevant queries
+                await queryClient.invalidateQueries({ queryKey: [`/api/registrations/${selectedGame}/${activeMode}`] });
+                await queryClient.invalidateQueries({ queryKey: [`/api/tournaments/${selectedGame}/${activeMode}`] });
+                await queryClient.invalidateQueries({ queryKey: ["/api/activity-logs"] });
+                
+                // Show success message
+                toast({
+                  title: "Data Refreshed",
+                  description: "All data has been successfully updated.",
+                });
+              }}
+              data-testid="button-refresh-data"
+            >
+              <RefreshCw className="w-4 h-4" />
+              Refresh Data
+            </Button>
             <Button
               variant="outline"
               className="gap-2"

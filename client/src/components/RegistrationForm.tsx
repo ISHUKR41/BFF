@@ -37,6 +37,7 @@ export function RegistrationForm({ gameType, tournamentType, qrCodeUrl, onSubmit
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const config = TOURNAMENT_CONFIG[gameType][tournamentType];
   const formKey = `registration-form-${gameType}-${tournamentType}`;
+  const globalFormKey = `registration-form-global`;
 
   const gameColor = gameType === "bgmi" ? "text-bgmi" : "text-freefire";
   const gameBg = gameType === "bgmi" ? "bg-bgmi" : "bg-freefire";
@@ -63,7 +64,7 @@ export function RegistrationForm({ gameType, tournamentType, qrCodeUrl, onSubmit
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
-    mode: "onChange",
+    mode: "onBlur", // Change from onChange to onBlur to reduce re-renders
     defaultValues: {
       teamName: "",
       playerName: "",
@@ -81,6 +82,34 @@ export function RegistrationForm({ gameType, tournamentType, qrCodeUrl, onSubmit
   });
 
   useEffect(() => {
+    // Load global form data first
+    const globalSavedData = localStorage.getItem(globalFormKey);
+    if (globalSavedData) {
+      try {
+        const parsedData = JSON.parse(globalSavedData);
+        // Only load data for the current game and tournament type
+        if (parsedData.gameType === gameType && parsedData.tournamentType === tournamentType) {
+          Object.keys(parsedData).forEach((key) => {
+            if (key !== 'gameType' && key !== 'tournamentType') {
+              form.setValue(key as keyof FormData, parsedData[key]);
+            }
+          });
+          if (parsedData.paymentScreenshot) {
+            setScreenshotPreview(parsedData.paymentScreenshot);
+          }
+          if (parsedData.fileName) {
+            setFileName(parsedData.fileName);
+          }
+          if (parsedData.fileSize) {
+            setFileSize(parsedData.fileSize);
+          }
+        }
+      } catch (error) {
+        console.error("Error loading global form data:", error);
+      }
+    }
+    
+    // Load specific form data
     const savedData = localStorage.getItem(formKey);
     if (savedData) {
       try {
@@ -101,7 +130,7 @@ export function RegistrationForm({ gameType, tournamentType, qrCodeUrl, onSubmit
         console.error("Error loading saved form data:", error);
       }
     }
-  }, [formKey, form]);
+  }, [formKey, globalFormKey, gameType, tournamentType, form]);
 
   useEffect(() => {
     const subscription = form.watch((value) => {
@@ -109,12 +138,17 @@ export function RegistrationForm({ gameType, tournamentType, qrCodeUrl, onSubmit
         ...value,
         fileName,
         fileSize,
+        gameType,
+        tournamentType,
       };
+      // Save to specific form key
       localStorage.setItem(formKey, JSON.stringify(dataToSave));
+      // Save to global form key for cross-page persistence
+      localStorage.setItem(globalFormKey, JSON.stringify(dataToSave));
       setHasUnsavedChanges(true);
     });
     return () => subscription.unsubscribe();
-  }, [form, formKey, fileName, fileSize]);
+  }, [form, formKey, globalFormKey, fileName, fileSize, gameType, tournamentType]);
 
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -236,6 +270,7 @@ export function RegistrationForm({ gameType, tournamentType, qrCodeUrl, onSubmit
       'registration-form-freefire-solo',
       'registration-form-freefire-duo',
       'registration-form-freefire-squad',
+      'registration-form-global',
     ];
     
     formKeys.forEach(key => localStorage.removeItem(key));
