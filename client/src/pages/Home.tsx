@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import bgmiCardImage from "@assets/generated_images/BGMI_game_card_image_01a91a4f.png";
 import freeFireCardImage from "@assets/generated_images/Free_Fire_game_card_image_cf60f82b.png";
+import heroBackground from "@assets/generated_images/Gaming_tournament_hero_background_59a53abb.png";
 import { motion, useScroll, useTransform, useInView, useMotionValue, useSpring, AnimatePresence } from "framer-motion";
 import { useRef, useState, useEffect } from "react";
 import CountUp from "react-countup";
@@ -107,14 +108,24 @@ export default function Home() {
     <div className="min-h-screen bg-background">
       {/* Hero Section */}
       <section ref={heroRef} className="relative pt-32 pb-20 md:pt-40 md:pb-32 overflow-hidden">
-        {/* Animated Gradient Background with Parallax */}
-        <motion.div 
-          style={{ y, opacity }}
-          className="absolute inset-0 bg-gradient-to-b from-background via-background/95 to-background"
-        />
+        {/* Background Image with Parallax */}
         <motion.div 
           style={{ scale }}
-          className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-primary/10 via-background to-background"
+          className="absolute inset-0"
+        >
+          <img 
+            src={heroBackground} 
+            alt="Gaming Tournament Background"
+            className="w-full h-full object-cover opacity-40 dark:opacity-30"
+          />
+        </motion.div>
+        
+        {/* Multiple Gradient Overlays for Text Visibility */}
+        <div className="absolute inset-0 bg-gradient-to-b from-background/80 via-background/70 to-background" />
+        <div className="absolute inset-0 bg-gradient-to-r from-background/60 via-transparent to-background/60" />
+        <motion.div 
+          style={{ y, opacity }}
+          className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-primary/5 via-transparent to-transparent"
         />
         
         {/* Animated floating orbs */}
@@ -128,7 +139,7 @@ export default function Home() {
             repeat: Infinity,
             ease: "easeInOut"
           }}
-          className="absolute top-20 left-10 w-64 h-64 bg-bgmi/5 rounded-full blur-3xl"
+          className="absolute top-20 left-10 w-64 h-64 bg-bgmi/10 rounded-full blur-3xl"
         />
         <motion.div
           animate={{
@@ -140,7 +151,7 @@ export default function Home() {
             repeat: Infinity,
             ease: "easeInOut"
           }}
-          className="absolute bottom-20 right-10 w-64 h-64 bg-freefire/5 rounded-full blur-3xl"
+          className="absolute bottom-20 right-10 w-64 h-64 bg-freefire/10 rounded-full blur-3xl"
         />
         
         <div className="relative max-w-7xl mx-auto px-4 md:px-6 lg:px-8">
