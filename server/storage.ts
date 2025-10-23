@@ -20,9 +20,17 @@ import { drizzle } from "drizzle-orm/neon-http";
 import { eq, and, or, like, desc, sql } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 
-const connectionString = process.env.DATABASE_URL!;
-const sqlClient = neon(connectionString);
-const db = drizzle(sqlClient);
+function getDb() {
+  if (!process.env.DATABASE_URL) {
+    throw new Error("DATABASE_URL environment variable is not set. Please configure your database connection.");
+  }
+  
+  const connectionString = process.env.DATABASE_URL;
+  const sqlClient = neon(connectionString);
+  return drizzle(sqlClient);
+}
+
+const db = getDb();
 
 export interface IStorage {
   // Admin operations
