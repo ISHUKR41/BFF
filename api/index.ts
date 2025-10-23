@@ -1,168 +1,395 @@
-import { VercelRequest, VercelResponse } from '@vercel/node';
+import express, { type Request, Response, NextFunction } from "express";
+import jwt from "jsonwebtoken";
+import { storage } from "./storage-vercel";
 
-// Simple in-memory storage
-let tournaments: any[] = [];
-let registrations: any[] = [];
-let admins: any[] = [];
+const app = express();
 
-// Initialize data
-function initializeData() {
-  if (tournaments.length === 0) {
-    tournaments = [
-      { id: 'bgmi-solo', gameType: 'bgmi', tournamentType: 'solo', currentCount: 0, maxSlots: 100, entryFee: 20, winnerPrize: 350, runnerUpPrize: 250, perKillPrize: 9, qrCodeUrl: '' },
-      { id: 'bgmi-duo', gameType: 'bgmi', tournamentType: 'duo', currentCount: 0, maxSlots: 50, entryFee: 40, winnerPrize: 350, runnerUpPrize: 250, perKillPrize: 9, qrCodeUrl: '' },
-      { id: 'bgmi-squad', gameType: 'bgmi', tournamentType: 'squad', currentCount: 0, maxSlots: 25, entryFee: 80, winnerPrize: 350, runnerUpPrize: 250, perKillPrize: 9, qrCodeUrl: '' },
-      { id: 'freefire-solo', gameType: 'freefire', tournamentType: 'solo', currentCount: 0, maxSlots: 48, entryFee: 20, winnerPrize: 350, runnerUpPrize: 150, perKillPrize: 5, qrCodeUrl: '' },
-      { id: 'freefire-duo', gameType: 'freefire', tournamentType: 'duo', currentCount: 0, maxSlots: 24, entryFee: 40, winnerPrize: 350, runnerUpPrize: 150, perKillPrize: 5, qrCodeUrl: '' },
-      { id: 'freefire-squad', gameType: 'freefire', tournamentType: 'squad', currentCount: 0, maxSlots: 12, entryFee: 80, winnerPrize: 350, runnerUpPrize: 150, perKillPrize: 5, qrCodeUrl: '' },
-    ];
-  }
-  
-  if (admins.length === 0) {
-    admins.push({
-      id: 'admin-1',
-      username: 'admin',
-      password: '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', // admin123
-      createdAt: new Date().toISOString()
-    });
+// JWT payload interface
+interface JWTPayload {
+  adminId: string;
+  username: string;
+  iat: number;
+  exp: number;
+}
+
+// Extend Request type to include admin info
+declare global {
+  namespace Express {
+    interface Request {
+      admin?: {
+        id: string;
+        username: string;
+      };
+    }
   }
 }
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // Initialize data
-  initializeData();
-  
-  // Enable CORS
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-  res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization');
+// Middleware setup
+app.use(
+  express.json({
+    limit: "10mb",
+    verify: (req: Request, _res: Response, buf: Buffer) => {
+      (req as any).rawBody = buf;
+    },
+  })
+);
+app.use(express.urlencoded({ extended: false, limit: "10mb" }));
 
-  if (req.method === 'OPTIONS') {
-    res.status(200).end();
+// CORS middleware
+app.use((req: Request, res: Response, next: NextFunction) => {
+  const origin = req.headers.origin;
+  const allowedOrigins = [
+    process.env.FRONTEND_URL || "https://your-app.vercel.app",
+    "http://localhost:3000",
+    "http://localhost:5000",
+  ];
+
+  if (allowedOrigins.includes(origin as string) || !origin) {
+    res.setHeader("Access-Control-Allow-Origin", origin || "*");
+  }
+
+  res.setHeader(
+    "Access-Control-Allow-Methods",
+    "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+  );
+  res.setHeader(
+    "Access-Control-Allow-Headers",
+    "Content-Type, Authorization, X-Requested-With"
+  );
+  res.setHeader("Access-Control-Allow-Credentials", "true");
+  res.setHeader("Access-Control-Max-Age", "86400");
+
+  if (req.method === "OPTIONS") {
+    res.sendStatus(200);
     return;
   }
 
-  const { pathname } = new URL(req.url || '', 'http://localhost');
-  const path = pathname.replace('/api', '');
+  next();
+});
 
+// JWT Authentication middleware
+export function requireAuth(req: Request, res: Response, next: NextFunction) {
   try {
-    // Health check
-    if (path === '/health') {
-      return res.status(200).json({
-        status: 'healthy',
-        timestamp: new Date().toISOString(),
-        database: 'in-memory',
-        environment: process.env.NODE_ENV || 'production'
-      });
+    const authHeader = req.headers.authorization;
+
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res
+        .status(401)
+        .json({ error: "No valid authorization token provided" });
     }
 
-    // Get all tournaments
-    if (path === '/tournaments' && req.method === 'GET') {
-      return res.status(200).json(tournaments);
-    }
+    const token = authHeader.substring(7);
+    const secret =
+      process.env.JWT_SECRET || "tournament-jwt-secret-change-in-production";
 
-    // Get specific tournament
-    if (path.startsWith('/tournaments/') && req.method === 'GET') {
-      const [, gameType, tournamentType] = path.split('/');
-      const tournament = tournaments.find(t => 
-        t.gameType === gameType && t.tournamentType === tournamentType
-      );
-      
-      if (!tournament) {
-        return res.status(404).json({ error: 'Tournament not found' });
-      }
-      
-      return res.status(200).json(tournament);
-    }
+    const decoded = jwt.verify(token, secret) as JWTPayload;
 
-    // Create registration
-    if (path === '/registrations' && req.method === 'POST') {
-      const registration = req.body;
-      
-      console.log('Registration data received:', JSON.stringify(registration, null, 2));
-      
-      // Validate required fields
-      if (!registration.gameType || !registration.tournamentType || !registration.playerName) {
-        return res.status(400).json({ 
-          error: 'Missing required fields',
-          details: 'gameType, tournamentType, and playerName are required'
-        });
-      }
-      
-      // Find tournament
-      const tournament = tournaments.find(t => 
-        t.gameType === registration.gameType && 
-        t.tournamentType === registration.tournamentType
-      );
-      
-      if (!tournament) {
-        return res.status(404).json({ error: 'Tournament not found' });
-      }
-      
-      if (tournament.currentCount >= tournament.maxSlots) {
-        return res.status(400).json({ error: 'Tournament is full' });
-      }
-      
-      // Create registration
-      const newRegistration = {
-        ...registration,
-        id: `reg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        status: 'pending',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
-      
-      registrations.push(newRegistration);
-      
-      // Update tournament count
-      tournament.currentCount += 1;
-      
-      console.log('Registration created successfully:', newRegistration.id);
-      console.log('Total registrations:', registrations.length);
-      
-      return res.status(201).json({
-        success: true,
-        registration: newRegistration,
-        message: 'Registration successful!'
-      });
-    }
+    req.admin = {
+      id: decoded.adminId,
+      username: decoded.username,
+    };
 
-    // Get all registrations (admin)
-    if (path === '/registrations' && req.method === 'GET') {
-      return res.status(200).json(registrations);
-    }
-
-    // Admin login
-    if (path === '/admin/login' && req.method === 'POST') {
-      const { username, password } = req.body;
-      
-      if (!username || !password) {
-        return res.status(400).json({ error: 'Username and password are required' });
-      }
-      
-      const admin = admins.find(a => a.username === username);
-      
-      if (!admin || password !== 'admin123') {
-        return res.status(401).json({ error: 'Invalid credentials' });
-      }
-      
-      return res.status(200).json({
-        success: true,
-        admin: { id: admin.id, username: admin.username },
-        token: 'admin-token-' + Date.now()
-      });
-    }
-
-    // Default response
-    return res.status(404).json({ error: 'Endpoint not found' });
-
+    next();
   } catch (error) {
-    console.error('API Error:', error);
-    return res.status(500).json({ 
-      error: 'Internal server error',
-      message: error instanceof Error ? error.message : 'Unknown error',
-      timestamp: new Date().toISOString()
-    });
+    if (error instanceof jwt.JsonWebTokenError) {
+      return res.status(401).json({ error: "Invalid token" });
+    }
+    if (error instanceof jwt.TokenExpiredError) {
+      return res.status(401).json({ error: "Token expired" });
+    }
+    return res.status(401).json({ error: "Authentication failed" });
   }
 }
+
+// Generate JWT token
+export function generateToken(adminId: string, username: string): string {
+  const secret =
+    process.env.JWT_SECRET || "tournament-jwt-secret-change-in-production";
+  const expiresIn = process.env.JWT_EXPIRES_IN || "24h";
+
+  return jwt.sign({ adminId, username }, secret, { expiresIn });
+}
+
+// Health check endpoint
+app.get("/api/health", async (req: Request, res: Response) => {
+  try {
+    await initializeStorage();
+    const status = {
+      status: "healthy",
+      timestamp: new Date().toISOString(),
+      database: "in-memory",
+      environment: process.env.NODE_ENV || "production",
+    };
+
+    res.json(status);
+  } catch (error: any) {
+    res.status(500).json({
+      status: "unhealthy",
+      timestamp: new Date().toISOString(),
+      error: "Health check failed",
+      ...(process.env.NODE_ENV === "development" && { details: error.message }),
+    });
+  }
+});
+
+// Admin login
+app.post("/api/admin/login", async (req: Request, res: Response) => {
+  try {
+    const { username, password } = req.body;
+
+    if (!username || !password) {
+      return res
+        .status(400)
+        .json({ error: "Username and password are required" });
+    }
+
+    const admin = await storage.validateAdmin(username, password);
+
+    if (!admin) {
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
+
+    const token = generateToken(admin.id, admin.username);
+
+    res.json({
+      success: true,
+      admin: {
+        id: admin.id,
+        username: admin.username,
+      },
+      token,
+    });
+  } catch (error) {
+    console.error("Admin login error:", error);
+    res.status(500).json({ error: "Login failed" });
+  }
+});
+
+// Admin token validation
+app.get("/api/admin/validate", requireAuth, async (req: Request, res: Response) => {
+  try {
+    if (!req.admin) {
+      return res.status(401).json({ error: "Invalid token" });
+    }
+
+    res.json({
+      success: true,
+      admin: {
+        id: req.admin.id,
+        username: req.admin.username,
+      },
+    });
+  } catch (error) {
+    console.error("Token validation error:", error);
+    res.status(500).json({ error: "Token validation failed" });
+  }
+});
+
+// Get all tournaments
+app.get("/api/tournaments", async (req: Request, res: Response) => {
+  try {
+    await initializeStorage();
+    const tournaments = await storage.getAllTournaments();
+    res.json(tournaments);
+  } catch (error) {
+    console.error("Get tournaments error:", error);
+    res.status(500).json({ error: "Failed to fetch tournaments" });
+  }
+});
+
+// Get specific tournament
+app.get("/api/tournaments/:gameType/:tournamentType", async (req: Request, res: Response) => {
+  try {
+    await initializeStorage();
+    const { gameType, tournamentType } = req.params;
+    const tournament = await storage.getTournament(gameType, tournamentType);
+
+    if (!tournament) {
+      return res.status(404).json({ error: "Tournament not found" });
+    }
+
+    res.json(tournament);
+  } catch (error) {
+    console.error("Get tournament error:", error);
+    res.status(500).json({ error: "Failed to fetch tournament" });
+  }
+});
+
+// Create registration
+app.post("/api/registrations", async (req: Request, res: Response) => {
+  try {
+    await initializeStorage();
+    
+    const registration = req.body;
+    
+    // Validate required fields
+    if (!registration.gameType || !registration.tournamentType || !registration.playerName) {
+      return res.status(400).json({ error: "Missing required fields" });
+    }
+    
+    // Check if tournament exists and has available slots
+    const tournament = await storage.getTournament(
+      registration.gameType,
+      registration.tournamentType
+    );
+
+    if (!tournament) {
+      return res.status(404).json({ error: "Tournament not found" });
+    }
+
+    if (tournament.currentCount >= tournament.maxSlots) {
+      return res.status(400).json({ error: "Tournament is full" });
+    }
+
+    // Generate unique ID for registration
+    const registrationId = `reg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    registration.id = registrationId;
+
+    // Create registration
+    const newRegistration = await storage.createRegistration(registration);
+
+    // Update tournament count
+    await storage.updateTournamentCount(
+      registration.gameType,
+      registration.tournamentType,
+      1
+    );
+
+    res.status(201).json(newRegistration);
+  } catch (error) {
+    console.error("Create registration error:", error);
+    res.status(500).json({ error: "Failed to create registration" });
+  }
+});
+
+// Get all registrations (admin only)
+app.get("/api/registrations", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const registrations = await storage.getAllRegistrations();
+    res.json(registrations);
+  } catch (error) {
+    console.error("Get registrations error:", error);
+    res.status(500).json({ error: "Failed to fetch registrations" });
+  }
+});
+
+// Update registration (admin only)
+app.patch("/api/registrations/:id", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const updates = req.body;
+
+    const registration = await storage.updateRegistration(id, updates);
+    res.json(registration);
+  } catch (error) {
+    console.error("Update registration error:", error);
+    res.status(500).json({ error: "Failed to update registration" });
+  }
+});
+
+// Delete registration (admin only)
+app.delete("/api/registrations/:id", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const deleted = await storage.deleteRegistration(id);
+
+    if (!deleted) {
+      return res.status(404).json({ error: "Registration not found" });
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Delete registration error:", error);
+    res.status(500).json({ error: "Failed to delete registration" });
+  }
+});
+
+// Bulk operations (admin only)
+app.post("/api/registrations/bulk/approve", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const { ids } = req.body;
+    const updated = await storage.bulkUpdateRegistrations(ids, { status: "approved" });
+    res.json({ success: true, updated });
+  } catch (error) {
+    console.error("Bulk approve error:", error);
+    res.status(500).json({ error: "Failed to approve registrations" });
+  }
+});
+
+app.post("/api/registrations/bulk/reject", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const { ids } = req.body;
+    const updated = await storage.bulkUpdateRegistrations(ids, { status: "rejected" });
+    res.json({ success: true, updated });
+  } catch (error) {
+    console.error("Bulk reject error:", error);
+    res.status(500).json({ error: "Failed to reject registrations" });
+  }
+});
+
+app.post("/api/registrations/bulk/delete", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const { ids } = req.body;
+    const deleted = await storage.bulkDeleteRegistrations(ids);
+    res.json({ success: true, deleted });
+  } catch (error) {
+    console.error("Bulk delete error:", error);
+    res.status(500).json({ error: "Failed to delete registrations" });
+  }
+});
+
+// Tournament management (admin only)
+app.post("/api/tournaments/:gameType/:tournamentType/reset", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const { gameType, tournamentType } = req.params;
+    const tournament = await storage.resetTournament(gameType, tournamentType);
+    res.json(tournament);
+  } catch (error) {
+    console.error("Reset tournament error:", error);
+    res.status(500).json({ error: "Failed to reset tournament" });
+  }
+});
+
+app.post("/api/tournaments/:gameType/:tournamentType/qr", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const { gameType, tournamentType } = req.params;
+    const { qrCodeUrl } = req.body;
+
+    if (!qrCodeUrl) {
+      return res.status(400).json({ error: "QR code URL is required" });
+    }
+
+    const tournament = await storage.updateQRCode(gameType, tournamentType, qrCodeUrl);
+    res.json(tournament);
+  } catch (error) {
+    console.error("Update QR code error:", error);
+    res.status(500).json({ error: "Failed to update QR code" });
+  }
+});
+
+// Initialize storage
+let storageInitialized = false;
+
+async function initializeStorage() {
+  if (!storageInitialized) {
+    try {
+      await storage.initialize();
+      storageInitialized = true;
+      console.log("Storage initialized successfully");
+    } catch (error) {
+      console.error("Failed to initialize storage:", error);
+    }
+  }
+}
+
+// Error handling middleware
+app.use((error: any, req: Request, res: Response, next: NextFunction) => {
+  console.error('API Error:', error);
+  res.status(500).json({ 
+    error: 'Internal server error',
+    message: process.env.NODE_ENV === 'development' ? error.message : 'Something went wrong'
+  });
+});
+
+// Export the Express app for Vercel
+export default app;
