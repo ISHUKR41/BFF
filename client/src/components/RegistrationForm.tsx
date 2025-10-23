@@ -138,7 +138,8 @@ export function RegistrationForm({ gameType, tournamentType, qrCodeUrl, onSubmit
           let width = img.width;
           let height = img.height;
 
-          const maxDimension = 1200;
+          // Reduced max dimension for faster compression
+          const maxDimension = 800;
           if (width > height && width > maxDimension) {
             height = (height * maxDimension) / width;
             width = maxDimension;
@@ -154,9 +155,10 @@ export function RegistrationForm({ gameType, tournamentType, qrCodeUrl, onSubmit
           if (ctx) {
             ctx.drawImage(img, 0, 0, width, height);
             
-            let quality = 0.7;
-            if (file.size > 2 * 1024 * 1024) quality = 0.5;
-            if (file.size > 4 * 1024 * 1024) quality = 0.3;
+            // More aggressive compression for better performance
+            let quality = 0.6;
+            if (file.size > 2 * 1024 * 1024) quality = 0.4;
+            if (file.size > 4 * 1024 * 1024) quality = 0.2;
 
             const compressedBase64 = canvas.toDataURL("image/jpeg", quality);
             resolve(compressedBase64);
@@ -226,14 +228,28 @@ export function RegistrationForm({ gameType, tournamentType, qrCodeUrl, onSubmit
   };
 
   const handleSubmit = async (data: FormData) => {
+    let timeoutId: NodeJS.Timeout | null = null;
+    
     try {
       setCurrentStep(3);
-      await onSubmit({
-        ...data,
-        gameType,
-        tournamentType,
-        status: "pending",
+      
+      // Add timeout for submission to prevent infinite loading
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error("Submission timeout")), 30000);
       });
+      
+      await Promise.race([
+        onSubmit({
+          ...data,
+          gameType,
+          tournamentType,
+          status: "pending",
+        }),
+        timeoutPromise
+      ]);
+      
+      // Clear timeout on successful submission
+      if (timeoutId) clearTimeout(timeoutId);
       
       // Reset form state after successful submission
       form.reset();
@@ -250,6 +266,9 @@ export function RegistrationForm({ gameType, tournamentType, qrCodeUrl, onSubmit
         onSuccess();
       }
     } catch (error) {
+      // Clear timeout on error
+      if (timeoutId) clearTimeout(timeoutId);
+      
       // On error, go back to step 2 so user can retry
       setCurrentStep(2);
       console.error("Submission error:", error);
