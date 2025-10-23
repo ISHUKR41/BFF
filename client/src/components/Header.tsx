@@ -1,6 +1,7 @@
 import { Link, useLocation } from "wouter";
 import { Trophy, Shield, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 export function Header() {
   const [location] = useLocation();
@@ -48,13 +49,16 @@ export function Header() {
             </Link>
           </nav>
 
-          {/* Admin Link */}
-          <Link href="/admin/login" data-testid="link-admin">
-            <Button variant="outline" size="sm" className="gap-2">
-              <User className="w-4 h-4" />
-              <span className="hidden sm:inline">Admin</span>
-            </Button>
-          </Link>
+          {/* Theme Toggle & Admin Link */}
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            <Link href="/admin/login" data-testid="link-admin">
+              <Button variant="outline" size="sm" className="gap-2">
+                <User className="w-4 h-4" />
+                <span className="hidden sm:inline">Admin</span>
+              </Button>
+            </Link>
+          </div>
         </div>
       </div>
     </header>

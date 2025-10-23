@@ -16,9 +16,17 @@ This is a professional tournament management platform for BGMI (Battlegrounds Mo
 - Session-based authentication for admin access
 - Professional, modern UI with dark mode design and smooth animations
 
-## Recent Enhancements (Latest Update)
+## Recent Enhancements (Latest Update - October 23, 2025)
 
-### Critical Database Migration (October 2025)
+### Dark Mode Support Added
+- **Fully functional dark mode with theme toggle**
+  - ThemeProvider component manages theme state with React Context
+  - Theme persists to localStorage and syncs across sessions
+  - Detects system preference on first visit
+  - Smooth theme toggle button with Sun/Moon icons in Header
+  - All existing colors and design preserved - seamless light/dark transition
+
+### Critical Database Migration & Performance Optimizations
 - **Migrated from in-memory storage to PostgreSQL database**
   - Replaced `MemStorage` class with `DbStorage` using Drizzle ORM
   - All data now persists across server restarts and deployments
@@ -31,6 +39,12 @@ This is a professional tournament management platform for BGMI (Battlegrounds Mo
   - LocalStorage is cleared on submission success
   - Better error handling - form returns to step 2 on submission failure
   - Fixed race condition where multiple users could register simultaneously
+
+- **Performance optimizations for image compression**
+  - Reduced max dimension from 1200px to 800px for faster processing
+  - More aggressive compression (quality tiers: 0.6/0.4/0.2)
+  - Added 30-second timeout protection with proper cleanup
+  - Eliminates lag during form submission
 
 ## Previous Enhancements
 
