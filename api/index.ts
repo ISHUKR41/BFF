@@ -113,6 +113,7 @@ export function generateToken(adminId: string, username: string): string {
 // Health check endpoint
 app.get("/api/health", async (req: Request, res: Response) => {
   try {
+    await initializeStorage();
     const status = {
       status: "healthy",
       timestamp: new Date().toISOString(),
@@ -187,6 +188,7 @@ app.get("/api/admin/validate", requireAuth, async (req: Request, res: Response) 
 // Get all tournaments
 app.get("/api/tournaments", async (req: Request, res: Response) => {
   try {
+    await initializeStorage();
     const tournaments = await storage.getAllTournaments();
     res.json(tournaments);
   } catch (error) {
@@ -198,6 +200,7 @@ app.get("/api/tournaments", async (req: Request, res: Response) => {
 // Get specific tournament
 app.get("/api/tournaments/:gameType/:tournamentType", async (req: Request, res: Response) => {
   try {
+    await initializeStorage();
     const { gameType, tournamentType } = req.params;
     const tournament = await storage.getTournament(gameType, tournamentType);
 
@@ -215,7 +218,14 @@ app.get("/api/tournaments/:gameType/:tournamentType", async (req: Request, res: 
 // Create registration
 app.post("/api/registrations", async (req: Request, res: Response) => {
   try {
+    await initializeStorage();
+    
     const registration = req.body;
+    
+    // Validate required fields
+    if (!registration.gameType || !registration.tournamentType || !registration.playerName) {
+      return res.status(400).json({ error: "Missing required fields" });
+    }
     
     // Check if tournament exists and has available slots
     const tournament = await storage.getTournament(
@@ -227,9 +237,13 @@ app.post("/api/registrations", async (req: Request, res: Response) => {
       return res.status(404).json({ error: "Tournament not found" });
     }
 
-    if (tournament.current_count >= tournament.max_slots) {
+    if (tournament.currentCount >= tournament.maxSlots) {
       return res.status(400).json({ error: "Tournament is full" });
     }
+
+    // Generate unique ID for registration
+    const registrationId = `reg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    registration.id = registrationId;
 
     // Create registration
     const newRegistration = await storage.createRegistration(registration);
@@ -354,14 +368,28 @@ app.post("/api/tournaments/:gameType/:tournamentType/qr", requireAuth, async (re
 });
 
 // Initialize storage
-(async () => {
-  try {
-    await storage.initialize();
-    console.log("Storage initialized successfully");
-  } catch (error) {
-    console.error("Failed to initialize storage:", error);
+let storageInitialized = false;
+
+async function initializeStorage() {
+  if (!storageInitialized) {
+    try {
+      await storage.initialize();
+      storageInitialized = true;
+      console.log("Storage initialized successfully");
+    } catch (error) {
+      console.error("Failed to initialize storage:", error);
+    }
   }
-})();
+}
+
+// Error handling middleware
+app.use((error: any, req: Request, res: Response, next: NextFunction) => {
+  console.error('API Error:', error);
+  res.status(500).json({ 
+    error: 'Internal server error',
+    message: process.env.NODE_ENV === 'development' ? error.message : 'Something went wrong'
+  });
+});
 
 // Export the Express app for Vercel
 export default app;

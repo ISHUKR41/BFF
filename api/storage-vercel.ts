@@ -136,7 +136,13 @@ class VercelStorage implements IStorage {
       createdAt: new Date(),
       updatedAt: new Date()
     };
+    
+    // Add to registrations array
     registrations.push(newRegistration);
+    
+    // Log the creation
+    console.log('Registration created:', newRegistration.id);
+    
     return newRegistration;
   }
 
