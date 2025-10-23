@@ -64,9 +64,27 @@ export const registrations = pgTable("registrations", {
   // Payment info
   paymentScreenshot: text("payment_screenshot"),
   transactionId: text("transaction_id").notNull(),
+  paymentVerified: integer("payment_verified").default(0), // 0 = not verified, 1 = verified
+  
+  // Admin fields
+  adminNotes: text("admin_notes"),
+  isFlagged: integer("is_flagged").default(0), // 0 = not flagged, 1 = flagged
   
   status: text("status").notNull().default("pending"), // "pending" | "approved" | "rejected"
   submittedAt: timestamp("submitted_at").notNull().default(sql`now()`),
+  lastModifiedAt: timestamp("last_modified_at"),
+  lastModifiedBy: text("last_modified_by"),
+});
+
+// Activity logs table
+export const activityLogs = pgTable("activity_logs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  adminUsername: text("admin_username").notNull(),
+  action: text("action").notNull(), // "approve", "reject", "delete", "edit", "flag", etc.
+  targetType: text("target_type").notNull(), // "registration", "tournament", "qr_code"
+  targetId: text("target_id").notNull(),
+  details: text("details"), // JSON string with action details
+  timestamp: timestamp("timestamp").notNull().default(sql`now()`),
 });
 
 export const insertRegistrationSchema = createInsertSchema(registrations).omit({
@@ -92,6 +110,15 @@ export const insertRegistrationSchema = createInsertSchema(registrations).omit({
 
 export type InsertRegistration = z.infer<typeof insertRegistrationSchema>;
 export type Registration = typeof registrations.$inferSelect;
+
+// Activity log schema
+export const insertActivityLogSchema = createInsertSchema(activityLogs).omit({
+  id: true,
+  timestamp: true,
+});
+
+export type InsertActivityLog = z.infer<typeof insertActivityLogSchema>;
+export type ActivityLog = typeof activityLogs.$inferSelect;
 
 // Tournament configuration constants
 export const TOURNAMENT_CONFIG = {

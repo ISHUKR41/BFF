@@ -167,7 +167,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Invalid status" });
       }
 
-      const registration = await storage.updateRegistrationStatus(id, status);
+      // Get admin username from session
+      const adminId = req.session.adminId;
+      const admin = await storage.getAdmin(adminId!);
+      const adminUsername = admin?.username;
+
+      const registration = await storage.updateRegistrationStatus(id, status, adminUsername);
 
       if (!registration) {
         return res.status(404).json({ error: "Registration not found" });
@@ -176,6 +181,245 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(registration);
     } catch (error) {
       res.status(500).json({ error: "Failed to update registration" });
+    }
+  });
+
+  // Search registrations (admin only)
+  app.get("/api/registrations/search/:query", requireAdmin, async (req, res) => {
+    try {
+      const { query } = req.params;
+      const registrations = await storage.searchRegistrations(query);
+      res.json(registrations);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to search registrations" });
+    }
+  });
+
+  // Update registration details (admin only)
+  app.put("/api/registrations/:id/details", requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const updates = req.body;
+
+      const adminId = req.session.adminId;
+      const admin = await storage.getAdmin(adminId!);
+      const adminUsername = admin?.username;
+
+      const registration = await storage.updateRegistrationDetails(id, updates, adminUsername);
+
+      if (!registration) {
+        return res.status(404).json({ error: "Registration not found" });
+      }
+
+      res.json(registration);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update registration details" });
+    }
+  });
+
+  // Add/update notes for registration (admin only)
+  app.patch("/api/registrations/:id/notes", requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { notes } = req.body;
+
+      const adminId = req.session.adminId;
+      const admin = await storage.getAdmin(adminId!);
+      const adminUsername = admin?.username;
+
+      const registration = await storage.updateRegistrationNotes(id, notes, adminUsername);
+
+      if (!registration) {
+        return res.status(404).json({ error: "Registration not found" });
+      }
+
+      res.json(registration);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update notes" });
+    }
+  });
+
+  // Toggle flag on registration (admin only)
+  app.patch("/api/registrations/:id/flag", requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      const adminId = req.session.adminId;
+      const admin = await storage.getAdmin(adminId!);
+      const adminUsername = admin?.username;
+
+      const registration = await storage.toggleRegistrationFlag(id, adminUsername);
+
+      if (!registration) {
+        return res.status(404).json({ error: "Registration not found" });
+      }
+
+      res.json(registration);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to toggle flag" });
+    }
+  });
+
+  // Toggle payment verification (admin only)
+  app.patch("/api/registrations/:id/verify-payment", requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      const adminId = req.session.adminId;
+      const admin = await storage.getAdmin(adminId!);
+      const adminUsername = admin?.username;
+
+      const registration = await storage.togglePaymentVerification(id, adminUsername);
+
+      if (!registration) {
+        return res.status(404).json({ error: "Registration not found" });
+      }
+
+      res.json(registration);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to toggle payment verification" });
+    }
+  });
+
+  // Delete registration (admin only)
+  app.delete("/api/registrations/:id", requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      const adminId = req.session.adminId;
+      const admin = await storage.getAdmin(adminId!);
+      const adminUsername = admin?.username;
+
+      const registration = await storage.getRegistration(id);
+      
+      if (!registration) {
+        return res.status(404).json({ error: "Registration not found" });
+      }
+
+      const success = await storage.deleteRegistration(id);
+
+      if (success && adminUsername) {
+        await storage.createActivityLog({
+          adminUsername,
+          action: "delete",
+          targetType: "registration",
+          targetId: id,
+          details: JSON.stringify({ playerName: registration.playerName, teamName: registration.teamName }),
+        });
+      }
+
+      res.json({ success });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete registration" });
+    }
+  });
+
+  // Bulk approve registrations (admin only)
+  app.post("/api/registrations/bulk/approve", requireAdmin, async (req, res) => {
+    try {
+      const { ids } = req.body;
+
+      if (!Array.isArray(ids) || ids.length === 0) {
+        return res.status(400).json({ error: "ids array is required" });
+      }
+
+      const adminId = req.session.adminId;
+      const admin = await storage.getAdmin(adminId!);
+      const adminUsername = admin?.username;
+
+      const results = await Promise.all(
+        ids.map(id => storage.updateRegistrationStatus(id, "approved", adminUsername))
+      );
+
+      const successful = results.filter(r => r !== undefined).length;
+      res.json({ success: true, count: successful });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to bulk approve" });
+    }
+  });
+
+  // Bulk reject registrations (admin only)
+  app.post("/api/registrations/bulk/reject", requireAdmin, async (req, res) => {
+    try {
+      const { ids } = req.body;
+
+      if (!Array.isArray(ids) || ids.length === 0) {
+        return res.status(400).json({ error: "ids array is required" });
+      }
+
+      const adminId = req.session.adminId;
+      const admin = await storage.getAdmin(adminId!);
+      const adminUsername = admin?.username;
+
+      const results = await Promise.all(
+        ids.map(id => storage.updateRegistrationStatus(id, "rejected", adminUsername))
+      );
+
+      const successful = results.filter(r => r !== undefined).length;
+      res.json({ success: true, count: successful });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to bulk reject" });
+    }
+  });
+
+  // Bulk delete registrations (admin only)
+  app.post("/api/registrations/bulk/delete", requireAdmin, async (req, res) => {
+    try {
+      const { ids } = req.body;
+
+      if (!Array.isArray(ids) || ids.length === 0) {
+        return res.status(400).json({ error: "ids array is required" });
+      }
+
+      const adminId = req.session.adminId;
+      const admin = await storage.getAdmin(adminId!);
+      const adminUsername = admin?.username;
+
+      const results = await Promise.all(
+        ids.map(async (id) => {
+          const registration = await storage.getRegistration(id);
+          const success = await storage.deleteRegistration(id);
+          
+          if (success && adminUsername && registration) {
+            await storage.createActivityLog({
+              adminUsername,
+              action: "bulk_delete",
+              targetType: "registration",
+              targetId: id,
+              details: JSON.stringify({ playerName: registration.playerName }),
+            });
+          }
+          
+          return success;
+        })
+      );
+
+      const successful = results.filter(r => r === true).length;
+      res.json({ success: true, count: successful });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to bulk delete" });
+    }
+  });
+
+  // Get activity logs (admin only)
+  app.get("/api/activity-logs", requireAdmin, async (req, res) => {
+    try {
+      const limit = req.query.limit ? parseInt(req.query.limit as string) : 50;
+      const logs = await storage.getAllActivityLogs(limit);
+      res.json(logs);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch activity logs" });
+    }
+  });
+
+  // Get activity logs for specific target (admin only)
+  app.get("/api/activity-logs/:targetType/:targetId", requireAdmin, async (req, res) => {
+    try {
+      const { targetType, targetId } = req.params;
+      const logs = await storage.getActivityLogsByTarget(targetType, targetId);
+      res.json(logs);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch activity logs" });
     }
   });
 

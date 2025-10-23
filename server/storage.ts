@@ -5,6 +5,8 @@ import {
   type InsertTournament,
   type Admin,
   type InsertAdmin,
+  type ActivityLog,
+  type InsertActivityLog,
   type GameType,
   type TournamentType,
   TOURNAMENT_CONFIG,
@@ -32,19 +34,32 @@ export interface IStorage {
   getAllRegistrations(): Promise<Registration[]>;
   getRegistrationsByGame(gameType: GameType, tournamentType: TournamentType): Promise<Registration[]>;
   getRegistrationsByStatus(status: string): Promise<Registration[]>;
-  updateRegistrationStatus(id: string, status: "pending" | "approved" | "rejected"): Promise<Registration | undefined>;
+  updateRegistrationStatus(id: string, status: "pending" | "approved" | "rejected", adminUsername?: string): Promise<Registration | undefined>;
+  updateRegistrationDetails(id: string, updates: Partial<Registration>, adminUsername?: string): Promise<Registration | undefined>;
+  updateRegistrationNotes(id: string, notes: string, adminUsername?: string): Promise<Registration | undefined>;
+  toggleRegistrationFlag(id: string, adminUsername?: string): Promise<Registration | undefined>;
+  togglePaymentVerification(id: string, adminUsername?: string): Promise<Registration | undefined>;
+  deleteRegistration(id: string): Promise<boolean>;
   deleteRegistrationsByTournament(gameType: GameType, tournamentType: TournamentType): Promise<void>;
+  searchRegistrations(query: string): Promise<Registration[]>;
+  
+  // Activity log operations
+  createActivityLog(log: InsertActivityLog): Promise<ActivityLog>;
+  getAllActivityLogs(limit?: number): Promise<ActivityLog[]>;
+  getActivityLogsByTarget(targetType: string, targetId: string): Promise<ActivityLog[]>;
 }
 
 export class MemStorage implements IStorage {
   private admins: Map<string, Admin>;
   private tournaments: Map<string, Tournament>;
   private registrations: Map<string, Registration>;
+  private activityLogs: Map<string, ActivityLog>;
 
   constructor() {
     this.admins = new Map();
     this.tournaments = new Map();
     this.registrations = new Map();
+    this.activityLogs = new Map();
     
     // Initialize default admin
     this.initializeDefaultAdmin();
@@ -204,6 +219,11 @@ export class MemStorage implements IStorage {
       player4Name: insertRegistration.player4Name || null,
       player4GameId: insertRegistration.player4GameId || null,
       paymentScreenshot: insertRegistration.paymentScreenshot || null,
+      paymentVerified: 0,
+      adminNotes: null,
+      isFlagged: 0,
+      lastModifiedAt: null,
+      lastModifiedBy: null,
     };
     this.registrations.set(id, registration);
     
@@ -236,14 +256,146 @@ export class MemStorage implements IStorage {
     );
   }
 
-  async updateRegistrationStatus(id: string, status: "pending" | "approved" | "rejected"): Promise<Registration | undefined> {
+  async updateRegistrationStatus(id: string, status: "pending" | "approved" | "rejected", adminUsername?: string): Promise<Registration | undefined> {
     const registration = this.registrations.get(id);
     if (!registration) {
       return undefined;
     }
     registration.status = status;
+    registration.lastModifiedAt = new Date();
+    registration.lastModifiedBy = adminUsername || null;
     this.registrations.set(id, registration);
+    
+    // Log activity
+    if (adminUsername) {
+      await this.createActivityLog({
+        adminUsername,
+        action: status,
+        targetType: "registration",
+        targetId: id,
+        details: JSON.stringify({ playerName: registration.playerName, teamName: registration.teamName }),
+      });
+    }
+    
     return registration;
+  }
+
+  async updateRegistrationDetails(id: string, updates: Partial<Registration>, adminUsername?: string): Promise<Registration | undefined> {
+    const registration = this.registrations.get(id);
+    if (!registration) {
+      return undefined;
+    }
+    
+    Object.assign(registration, updates, {
+      lastModifiedAt: new Date(),
+      lastModifiedBy: adminUsername || null,
+    });
+    
+    this.registrations.set(id, registration);
+    
+    // Log activity
+    if (adminUsername) {
+      await this.createActivityLog({
+        adminUsername,
+        action: "edit",
+        targetType: "registration",
+        targetId: id,
+        details: JSON.stringify({ updates, playerName: registration.playerName }),
+      });
+    }
+    
+    return registration;
+  }
+
+  async updateRegistrationNotes(id: string, notes: string, adminUsername?: string): Promise<Registration | undefined> {
+    const registration = this.registrations.get(id);
+    if (!registration) {
+      return undefined;
+    }
+    
+    registration.adminNotes = notes;
+    registration.lastModifiedAt = new Date();
+    registration.lastModifiedBy = adminUsername || null;
+    this.registrations.set(id, registration);
+    
+    // Log activity
+    if (adminUsername) {
+      await this.createActivityLog({
+        adminUsername,
+        action: "add_note",
+        targetType: "registration",
+        targetId: id,
+        details: JSON.stringify({ playerName: registration.playerName }),
+      });
+    }
+    
+    return registration;
+  }
+
+  async toggleRegistrationFlag(id: string, adminUsername?: string): Promise<Registration | undefined> {
+    const registration = this.registrations.get(id);
+    if (!registration) {
+      return undefined;
+    }
+    
+    registration.isFlagged = registration.isFlagged === 1 ? 0 : 1;
+    registration.lastModifiedAt = new Date();
+    registration.lastModifiedBy = adminUsername || null;
+    this.registrations.set(id, registration);
+    
+    // Log activity
+    if (adminUsername) {
+      await this.createActivityLog({
+        adminUsername,
+        action: registration.isFlagged === 1 ? "flag" : "unflag",
+        targetType: "registration",
+        targetId: id,
+        details: JSON.stringify({ playerName: registration.playerName }),
+      });
+    }
+    
+    return registration;
+  }
+
+  async togglePaymentVerification(id: string, adminUsername?: string): Promise<Registration | undefined> {
+    const registration = this.registrations.get(id);
+    if (!registration) {
+      return undefined;
+    }
+    
+    registration.paymentVerified = registration.paymentVerified === 1 ? 0 : 1;
+    registration.lastModifiedAt = new Date();
+    registration.lastModifiedBy = adminUsername || null;
+    this.registrations.set(id, registration);
+    
+    // Log activity
+    if (adminUsername) {
+      await this.createActivityLog({
+        adminUsername,
+        action: registration.paymentVerified === 1 ? "verify_payment" : "unverify_payment",
+        targetType: "registration",
+        targetId: id,
+        details: JSON.stringify({ playerName: registration.playerName }),
+      });
+    }
+    
+    return registration;
+  }
+
+  async deleteRegistration(id: string): Promise<boolean> {
+    const registration = this.registrations.get(id);
+    if (!registration) {
+      return false;
+    }
+    
+    // Decrement tournament count
+    await this.decrementTournamentCount(
+      registration.gameType as GameType,
+      registration.tournamentType as TournamentType
+    );
+    
+    this.registrations.delete(id);
+    return true;
   }
 
   async deleteRegistrationsByTournament(gameType: GameType, tournamentType: TournamentType): Promise<void> {
@@ -254,6 +406,52 @@ export class MemStorage implements IStorage {
       }
     });
     toDelete.forEach((id) => this.registrations.delete(id));
+  }
+
+  async searchRegistrations(query: string): Promise<Registration[]> {
+    const lowerQuery = query.toLowerCase();
+    return Array.from(this.registrations.values()).filter((reg) => {
+      return (
+        reg.playerName.toLowerCase().includes(lowerQuery) ||
+        reg.gameId.toLowerCase().includes(lowerQuery) ||
+        reg.whatsapp.includes(lowerQuery) ||
+        reg.transactionId.toLowerCase().includes(lowerQuery) ||
+        (reg.teamName && reg.teamName.toLowerCase().includes(lowerQuery)) ||
+        (reg.player2Name && reg.player2Name.toLowerCase().includes(lowerQuery)) ||
+        (reg.player3Name && reg.player3Name.toLowerCase().includes(lowerQuery)) ||
+        (reg.player4Name && reg.player4Name.toLowerCase().includes(lowerQuery)) ||
+        (reg.adminNotes && reg.adminNotes.toLowerCase().includes(lowerQuery))
+      );
+    });
+  }
+
+  // Activity log operations
+  async createActivityLog(insertLog: InsertActivityLog): Promise<ActivityLog> {
+    const id = randomUUID();
+    const log: ActivityLog = {
+      ...insertLog,
+      id,
+      timestamp: new Date(),
+      details: insertLog.details || null,
+    };
+    this.activityLogs.set(id, log);
+    return log;
+  }
+
+  async getAllActivityLogs(limit?: number): Promise<ActivityLog[]> {
+    const logs = Array.from(this.activityLogs.values())
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    
+    if (limit) {
+      return logs.slice(0, limit);
+    }
+    return logs;
+  }
+
+  async getActivityLogsByTarget(targetType: string, targetId: string): Promise<ActivityLog[]> {
+    return Array.from(this.activityLogs.values())
+      .filter((log) => log.targetType === targetType && log.targetId === targetId)
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
   }
 }
 
