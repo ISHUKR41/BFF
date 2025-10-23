@@ -227,6 +227,20 @@ export function RegistrationForm({ gameType, tournamentType, qrCodeUrl, onSubmit
     form.setValue("paymentScreenshot", "");
   };
 
+  const clearAllFormData = () => {
+    // Clear all tournament form data from localStorage
+    const formKeys = [
+      'registration-form-bgmi-solo',
+      'registration-form-bgmi-duo',
+      'registration-form-bgmi-squad',
+      'registration-form-freefire-solo',
+      'registration-form-freefire-duo',
+      'registration-form-freefire-squad',
+    ];
+    
+    formKeys.forEach(key => localStorage.removeItem(key));
+  };
+
   const handleSubmit = async (data: FormData) => {
     let timeoutId: NodeJS.Timeout | null = null;
     
@@ -259,7 +273,9 @@ export function RegistrationForm({ gameType, tournamentType, qrCodeUrl, onSubmit
       setFileError("");
       setCurrentStep(1);
       setHasUnsavedChanges(false);
-      localStorage.removeItem(formKey);
+      
+      // Clear ALL tournament form data from localStorage after successful submission
+      clearAllFormData();
       
       // Call onSuccess callback if provided
       if (onSuccess) {
