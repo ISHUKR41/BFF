@@ -1,68 +1,28 @@
 {
   "version": 2,
-  "builds": [
-    {
-      "src": "server/index-vercel.ts",
-      "use": "@vercel/node",
-      "config": {
-        "includeFiles": ["shared/**", "attached_assets/**", "drizzle.config.ts"],
-        "memory": 1024,
-        "maxLambdaSize": "50mb"
-      }
-    },
-    {
-      "src": "client/**",
-      "use": "@vercel/static-build",
-      "config": {
-        "distDir": "dist/public"
-      }
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist/public",
+  "functions": {
+    "api/index.ts": {
+      "maxDuration": 30,
+      "memory": 1024
     }
-  ],
+  },
   "routes": [
     {
       "src": "/attached_assets/(.*)",
       "dest": "/attached_assets/$1"
     },
     {
-      "src": "/api/health",
-      "dest": "/server/index-vercel.ts",
-      "methods": ["GET"]
-    },
-    {
-      "src": "/api/tournaments(.*)",
-      "dest": "/server/index-vercel.ts",
-      "methods": ["GET"]
-    },
-    {
-      "src": "/api/registrations(.*)",
-      "dest": "/server/index-vercel.ts",
-      "methods": ["GET", "POST"]
-    },
-    {
-      "src": "/api/admin(.*)",
-      "dest": "/server/index-vercel.ts"
-    },
-    {
-      "src": "/api/activity-logs(.*)",
-      "dest": "/server/index-vercel.ts"
+      "src": "/api/(.*)",
+      "dest": "/api/index.ts"
     },
     {
       "src": "/(.*)",
-      "dest": "/client/index.html"
+      "dest": "/index.html"
     }
   ],
   "env": {
     "NODE_ENV": "production"
-  },
-  "functions": {
-    "server/index-vercel.ts": {
-      "maxDuration": 30,
-      "memory": 1024
-    }
-  },
-  "build": {
-    "env": {
-      "NODE_ENV": "production"
-    }
   }
 }
